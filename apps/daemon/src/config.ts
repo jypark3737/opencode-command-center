@@ -1,18 +1,13 @@
 import { logger } from "./logger";
 
-export interface ProjectConfig {
-  path: string;
-  name: string;
-}
-
 export interface DaemonConfig {
   commandCenterUrl: string;
   apiKey: string;
   deviceId: string;
   deviceName: string;
   hostname: string;
-  projects: ProjectConfig[];
   opencodeBin: string;
+  opencodeDbPath: string;
 }
 
 export function loadConfig(): DaemonConfig {
@@ -32,12 +27,7 @@ export function loadConfig(): DaemonConfig {
     process.exit(1);
   }
 
-  let projects: ProjectConfig[] = [];
-  try {
-    projects = JSON.parse(process.env.PROJECTS ?? "[]");
-  } catch {
-    logger.warn("Failed to parse PROJECTS env var, using empty array");
-  }
+  const defaultDbPath = `${process.env.HOME}/.local/share/opencode/opencode.db`;
 
   return {
     commandCenterUrl: process.env.COMMAND_CENTER_URL!,
@@ -45,7 +35,7 @@ export function loadConfig(): DaemonConfig {
     deviceId: process.env.DEVICE_ID!,
     deviceName: process.env.DEVICE_NAME!,
     hostname: process.env.HOSTNAME ?? "unknown",
-    projects,
     opencodeBin: process.env.OPENCODE_BIN ?? "opencode",
+    opencodeDbPath: process.env.OPENCODE_DB_PATH ?? defaultDbPath,
   };
 }

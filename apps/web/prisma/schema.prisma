@@ -22,6 +22,20 @@ enum TaskStatus {
   CANCELLED
 }
 
+enum SessionStatus {
+  DISCOVERED
+  IDLE
+  BUSY
+  DEAD
+}
+
+enum VerificationType {
+  NONE
+  BUILD
+  LLM
+  BUILD_AND_LLM
+}
+
 model Device {
   id            String       @id @default(cuid())
   name          String
@@ -33,19 +47,22 @@ model Device {
 
   projects        Project[]
   taskAssignments Task[]    @relation("AssignedDevice")
+  sessions        Session[]
 
   @@map("devices")
 }
 
 model Project {
-  id          String   @id @default(cuid())
-  name        String
-  path        String
-  description String?
-  deviceId    String
-  device      Device   @relation(fields: [deviceId], references: [id], onDelete: Cascade)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id               String           @id @default(cuid())
+  name             String
+  path             String
+  description      String?
+  deviceId         String
+  device           Device           @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+  verificationType VerificationType @default(NONE)
+  verifyCommand    String?
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
 
   tasks Task[]
 
@@ -64,6 +81,8 @@ model Task {
   assignedDeviceId  String?
   assignedDevice    Device?    @relation("AssignedDevice", fields: [assignedDeviceId], references: [id])
   opencodeSessionId String?
+  sessionId         String?    @unique
+  session           Session?   @relation("CurrentSession", fields: [sessionId], references: [id])
   createdAt         DateTime   @default(now())
   startedAt         DateTime?
   completedAt       DateTime?
@@ -73,6 +92,23 @@ model Task {
   result   TaskResult?
 
   @@map("tasks")
+}
+
+model Session {
+  id                String        @id @default(cuid())
+  deviceId          String
+  device            Device        @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+  projectPath       String
+  opencodeSessionId String?
+  opencodePort      Int?
+  status            SessionStatus @default(DISCOVERED)
+  createdAt         DateTime      @default(now())
+  lastActiveAt      DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+
+  currentTask       Task?         @relation("CurrentSession")
+
+  @@map("sessions")
 }
 
 model SubTodo {
@@ -97,6 +133,7 @@ model TaskResult {
   durationMs     Int      @default(0)
   fullTranscript Json     @default("{}")
   adminReview    Json?
+  verification   Json?
   createdAt      DateTime @default(now())
 
   @@map("task_results")

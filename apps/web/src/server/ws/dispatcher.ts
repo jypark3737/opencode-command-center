@@ -2,79 +2,84 @@ import type { AssignTaskMessage } from "@opencode-cc/shared";
 import { agentRegistry } from "./registry";
 import { db } from "../db";
 
-export async function dispatchPendingTasks(deviceId: string): Promise<void> {
-  const conn = agentRegistry.get(deviceId);
-  if (!conn) return;
-
-  // Skip if agent already has an active task
-  if (conn.activeTaskId) return;
-
-  // Find a PENDING task for any project this agent manages
-  const projectPaths = conn.projects.map((p) => p.path);
-  if (projectPaths.length === 0) return;
-
-  // Find projects on this device
-  const projects = await db.project.findMany({
-    where: {
-      deviceId,
-      path: { in: projectPaths },
-    },
-    select: { id: true, path: true },
+export async function dispatchToSession(sessionId: string): Promise<void> {
+  // Get session info
+  const session = await db.session.findUnique({
+    where: { id: sessionId },
   });
 
-  if (projects.length === 0) return;
+  if (!session || session.status !== "IDLE") return;
 
-  const projectIds = projects.map((p) => p.id);
+  const conn = agentRegistry.get(session.deviceId);
+  if (!conn) return;
 
-  // Find oldest PENDING task for these projects (one at a time per device)
+  // Find projects on this device that match this session's projectPath
+  const project = await db.project.findFirst({
+    where: {
+      deviceId: session.deviceId,
+      path: session.projectPath,
+    },
+    select: { id: true, path: true, verificationType: true, verifyCommand: true },
+  });
+
+  if (!project) return;
+
+  // Find oldest PENDING task for this project
   const task = await db.task.findFirst({
     where: {
-      projectId: { in: projectIds },
+      projectId: project.id,
       status: "PENDING",
-    },
-    include: {
-      project: { select: { path: true } },
     },
     orderBy: [{ position: "asc" }, { createdAt: "asc" }],
   });
 
   if (!task) return;
 
-  // Claim the task (mark as ASSIGNED atomically)
+  // Claim the task atomically
   const claimed = await db.task.updateMany({
-    where: { id: task.id, status: "PENDING" }, // Only update if still PENDING
+    where: { id: task.id, status: "PENDING" },
     data: {
       status: "ASSIGNED",
-      assignedDeviceId: deviceId,
+      assignedDeviceId: session.deviceId,
+      sessionId: sessionId,
     },
   });
 
-  if (claimed.count === 0) return; // Race condition — another device claimed it
+  if (claimed.count === 0) return; // Race condition — another session claimed it
 
-  // Update registry
-  agentRegistry.setActiveTask(deviceId, task.id);
+  // Update session to BUSY
+  await db.session.update({
+    where: { id: sessionId },
+    data: { status: "BUSY", lastActiveAt: new Date() },
+  });
 
   // Send assignment to agent
   const msg: AssignTaskMessage = {
     type: "assign_task",
     taskId: task.id,
-    projectPath: task.project.path,
+    sessionId: sessionId,
+    projectPath: project.path,
     title: task.title,
     description: task.description ?? task.title,
+    verification: {
+      type: project.verificationType,
+      command: project.verifyCommand ?? undefined,
+    },
   };
 
   conn.ws.send(JSON.stringify(msg));
   console.log(
-    `[Dispatcher] Assigned task "${task.title}" to ${conn.deviceName}`
+    `[Dispatcher] Assigned task "${task.title}" to session ${sessionId} on ${conn.deviceName}`
   );
 }
 
-// Called periodically to dispatch tasks to idle agents
+// Called periodically or after events to dispatch tasks to all idle sessions
 export async function dispatchAll(): Promise<void> {
-  const agents = agentRegistry.getAll();
-  for (const agent of agents) {
-    if (!agent.activeTaskId) {
-      await dispatchPendingTasks(agent.deviceId);
-    }
+  const idleSessions = await db.session.findMany({
+    where: { status: "IDLE" },
+  });
+
+  for (const session of idleSessions) {
+    await dispatchToSession(session.id);
   }
 }

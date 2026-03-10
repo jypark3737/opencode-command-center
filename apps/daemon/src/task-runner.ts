@@ -1,24 +1,26 @@
-import type { AssignTaskMessage } from "@opencode-cc/shared";
-import type { OpenCodeProcess } from "./opencode/process";
+import type { SubTodoUpdate, FileChange } from "@opencode-cc/shared";
 import type { OpenCodeSQLiteReader } from "./opencode/sqlite-reader";
-import { exportSession } from "./opencode/exporter";
+import { exportSession, type ExportResult } from "./opencode/exporter";
 import { logger } from "./logger";
 
-export interface TaskRunnerDeps {
-  opencode: OpenCodeProcess;
-  sqliteReader: OpenCodeSQLiteReader;
-  opencodeBin: string;
+export interface TaskAssignment {
+  taskId: string;
+  sessionId: string;
+  projectPath: string;
+  title: string;
+  description: string;
+  verification: { type: string; command?: string };
+}
+
+export interface TaskCallbacks {
   onTaskStarted: (taskId: string, sessionId: string) => void;
-  onSubTodosUpdated: (
-    taskId: string,
-    subTodos: Array<{ content: string; checked: boolean; position: number }>
-  ) => void;
+  onSubTodosUpdated: (taskId: string, subTodos: SubTodoUpdate[]) => void;
   onTaskCompleted: (
     taskId: string,
     sessionId: string,
     result: {
       summary: string;
-      filesChanged: unknown[];
+      filesChanged: FileChange[];
       tokensUsed: number;
       durationMs: number;
       fullTranscript: unknown;
@@ -27,70 +29,81 @@ export interface TaskRunnerDeps {
   onTaskFailed: (taskId: string, error: string) => void;
 }
 
+export interface TaskResult {
+  exportResult: ExportResult;
+  durationMs: number;
+  opencodeSessionId: string;
+}
+
 export class TaskRunner {
-  private deps: TaskRunnerDeps;
-  private currentTaskId: string | null = null;
-  private subtodoPoller: ReturnType<typeof setInterval> | null = null;
+  private opencodeBin: string;
+  private sqliteReader: OpenCodeSQLiteReader;
 
-  constructor(deps: TaskRunnerDeps) {
-    this.deps = deps;
+  constructor(opencodeBin: string, sqliteReader: OpenCodeSQLiteReader) {
+    this.opencodeBin = opencodeBin;
+    this.sqliteReader = sqliteReader;
   }
 
-  isRunning(): boolean {
-    return this.currentTaskId !== null;
-  }
-
-  async runTask(assignment: AssignTaskMessage): Promise<void> {
-    if (this.currentTaskId) {
-      logger.warn(
-        `Already running task ${this.currentTaskId}, ignoring ${assignment.taskId}`
-      );
-      return;
-    }
-
-    this.currentTaskId = assignment.taskId;
+  async runTask(
+    assignment: TaskAssignment,
+    callbacks: TaskCallbacks
+  ): Promise<TaskResult> {
     const startTime = Date.now();
 
+    logger.info(`Starting task: ${assignment.title}`);
+
+    const prompt = buildPrompt(assignment);
+
+    // Run opencode via CLI (non-interactive mode)
+    const opencodeSessionId = await this.runOpenCode(
+      prompt,
+      assignment.projectPath
+    );
+
+    // Notify server task started
+    callbacks.onTaskStarted(assignment.taskId, opencodeSessionId);
+
+    // Start subtodo polling
+    let subtodoPoller: ReturnType<typeof setInterval> | null = null;
+    let lastHash = "";
+
+    subtodoPoller = setInterval(() => {
+      const subTodos = this.sqliteReader.getSubTodos(opencodeSessionId);
+      const hash = JSON.stringify(subTodos);
+
+      if (hash !== lastHash) {
+        lastHash = hash;
+        callbacks.onSubTodosUpdated(assignment.taskId, subTodos);
+      }
+    }, 5000);
+
     try {
-      logger.info(`Starting task: ${assignment.title}`);
-
-      // Build prompt
-      const prompt = buildPrompt(assignment);
-
-      // Run opencode via CLI (non-interactive mode)
-      const sessionId = await this.runOpenCode(prompt, assignment.projectPath);
-
-      // Notify server task started
-      this.deps.onTaskStarted(assignment.taskId, sessionId);
-
-      // Start subtodo polling
-      this.startSubtodoPolling(assignment.taskId, sessionId);
-
       // Wait for opencode to complete
-      await this.waitForCompletion(sessionId);
+      await this.waitForCompletion(opencodeSessionId);
 
       // Stop polling
-      this.stopSubtodoPolling();
+      if (subtodoPoller) {
+        clearInterval(subtodoPoller);
+        subtodoPoller = null;
+      }
 
       // Export results
-      const result = await exportSession(this.deps.opencodeBin, sessionId);
-
+      const exportResult = await exportSession(
+        this.opencodeBin,
+        opencodeSessionId
+      );
       const durationMs = Date.now() - startTime;
 
-      this.deps.onTaskCompleted(assignment.taskId, sessionId, {
-        ...result,
-        durationMs,
-        filesChanged: result.filesChanged,
-      });
+      logger.info(
+        `Task completed: ${assignment.title} in ${durationMs}ms`
+      );
 
-      logger.info(`Task completed: ${assignment.title} in ${durationMs}ms`);
+      return { exportResult, durationMs, opencodeSessionId };
     } catch (err) {
-      this.stopSubtodoPolling();
-      const error = err instanceof Error ? err.message : String(err);
-      logger.error(`Task failed: ${assignment.title}`, error);
-      this.deps.onTaskFailed(assignment.taskId, error);
-    } finally {
-      this.currentTaskId = null;
+      if (subtodoPoller) {
+        clearInterval(subtodoPoller);
+      }
+      throw err;
     }
   }
 
@@ -98,10 +111,8 @@ export class TaskRunner {
     prompt: string,
     projectPath: string
   ): Promise<string> {
-    // Use opencode run for non-interactive execution
-    // opencode run "<prompt>" --cwd <path> outputs session ID
     const proc = Bun.spawn(
-      [this.deps.opencodeBin, "run", prompt, "--cwd", projectPath],
+      [this.opencodeBin, "run", prompt, "--cwd", projectPath],
       {
         stdout: "pipe",
         stderr: "pipe",
@@ -117,8 +128,7 @@ export class TaskRunner {
       throw new Error(`opencode run failed (exit ${exitCode}): ${stderr}`);
     }
 
-    // Extract session ID from output
-    // opencode run outputs the session ID on the last line
+    // Extract session ID from output — last line
     const lines = output.trim().split("\n");
     const sessionId = lines[lines.length - 1]?.trim();
 
@@ -130,19 +140,16 @@ export class TaskRunner {
   }
 
   private async waitForCompletion(sessionId: string): Promise<void> {
-    // Poll until session is no longer active
-    // opencode export returns data when session is done
     const maxWait = 60 * 60 * 1000; // 1 hour max
-    const pollInterval = 5000; // 5 seconds
+    const pollInterval = 5000;
     const startTime = Date.now();
 
     while (Date.now() - startTime < maxWait) {
       await Bun.sleep(pollInterval);
 
-      // Check if session is complete by trying to export
       try {
         const proc = Bun.spawn(
-          [this.deps.opencodeBin, "export", sessionId],
+          [this.opencodeBin, "export", sessionId],
           { stdout: "pipe", stderr: "pipe" }
         );
         const output = await new Response(proc.stdout).text();
@@ -150,7 +157,6 @@ export class TaskRunner {
 
         if (output.trim()) {
           const data = JSON.parse(output);
-          // If we got valid export data, session is complete
           if (data && typeof data === "object") {
             return;
           }
@@ -162,30 +168,9 @@ export class TaskRunner {
 
     throw new Error(`Task timed out after ${maxWait / 1000}s`);
   }
-
-  private startSubtodoPolling(taskId: string, sessionId: string): void {
-    let lastHash = "";
-
-    this.subtodoPoller = setInterval(() => {
-      const subTodos = this.deps.sqliteReader.getSubTodos(sessionId);
-      const hash = JSON.stringify(subTodos);
-
-      if (hash !== lastHash) {
-        lastHash = hash;
-        this.deps.onSubTodosUpdated(taskId, subTodos);
-      }
-    }, 5000);
-  }
-
-  private stopSubtodoPolling(): void {
-    if (this.subtodoPoller) {
-      clearInterval(this.subtodoPoller);
-      this.subtodoPoller = null;
-    }
-  }
 }
 
-function buildPrompt(assignment: AssignTaskMessage): string {
+function buildPrompt(assignment: TaskAssignment): string {
   return `# Task: ${assignment.title}
 
 ${assignment.description}

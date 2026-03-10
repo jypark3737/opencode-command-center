@@ -27,16 +27,38 @@ interface SubTodo {
   position: number;
 }
 
+interface VerificationBadgeInfo {
+  passed: boolean;
+  type: string;
+}
+
 interface TaskCardProps {
   id: string;
   title: string;
   status: TaskStatus;
   subTodos: SubTodo[];
   result: TaskResult | null;
+  sessionPath?: string;
+  verificationResult?: VerificationBadgeInfo;
   onRequestReview: (taskId: string) => void;
 }
 
-export function TaskCard({ id, title, status, subTodos, result, onRequestReview }: TaskCardProps) {
+function truncatePath(p: string): string {
+  const segments = p.replace(/\/$/, "").split("/").filter(Boolean);
+  if (segments.length <= 2) return segments.join("/");
+  return "…/" + segments.slice(-2).join("/");
+}
+
+export function TaskCard({
+  id,
+  title,
+  status,
+  subTodos,
+  result,
+  sessionPath,
+  verificationResult,
+  onRequestReview,
+}: TaskCardProps) {
   const [showModal, setShowModal] = useState(false);
   const isClickable = status === "DONE" || status === "FAILED";
 
@@ -63,8 +85,46 @@ export function TaskCard({ id, title, status, subTodos, result, onRequestReview 
           <span style={{ fontWeight: 500, color: "#e5e5e5", fontSize: 14, flex: 1 }}>
             {title}
           </span>
-          <StatusBadge status={status} />
+          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+            {verificationResult && (
+              <span
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: 3,
+                  padding: "2px 7px",
+                  borderRadius: 10,
+                  fontSize: 10,
+                  fontWeight: 500,
+                  color: verificationResult.passed ? "#22c55e" : "#ef4444",
+                  background: verificationResult.passed
+                    ? "rgba(34,197,94,0.10)"
+                    : "rgba(239,68,68,0.10)",
+                }}
+              >
+                {verificationResult.passed ? "✓" : "✗"} verified
+              </span>
+            )}
+            <StatusBadge status={status} />
+          </div>
         </div>
+
+        {/* Session assignment line */}
+        {sessionPath && (
+          <div
+            style={{
+              marginTop: 4,
+              fontSize: 11,
+              color: "#666",
+              display: "flex",
+              alignItems: "center",
+              gap: 4,
+            }}
+          >
+            <span style={{ color: "#555" }}>⚡</span>
+            <span>Session: {truncatePath(sessionPath)}</span>
+          </div>
+        )}
 
         {/* Show subtodos when running */}
         {status === "RUNNING" && subTodos.length > 0 && (

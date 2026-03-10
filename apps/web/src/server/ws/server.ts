@@ -11,6 +11,11 @@ import {
   handleTaskCompleted,
   handleTaskFailed,
 } from "./handlers/task-result";
+import {
+  handleSessionsDiscovered,
+  handleSessionStatus,
+  handleTaskVerification,
+} from "./handlers/session";
 import { db } from "../db";
 import { sseBroadcaster } from "./sse";
 
@@ -46,6 +51,12 @@ function setupWebSocketServer(server: WebSocketServer): void {
           await handleTaskCompleted(msg);
         } else if (msg.type === "task_failed") {
           await handleTaskFailed(msg);
+        } else if (msg.type === "sessions_discovered") {
+          await handleSessionsDiscovered(msg);
+        } else if (msg.type === "session_status") {
+          await handleSessionStatus(msg);
+        } else if (msg.type === "task_verification") {
+          await handleTaskVerification(msg);
         }
       } catch (err) {
         console.error("[WS] Error handling message:", err);
@@ -61,6 +72,18 @@ function setupWebSocketServer(server: WebSocketServer): void {
             data: { status: "OFFLINE" },
           })
           .catch(() => {});
+
+        // Mark all sessions for this device as DEAD
+        await db.session
+          .updateMany({
+            where: {
+              deviceId,
+              status: { in: ["IDLE", "BUSY", "DISCOVERED"] },
+            },
+            data: { status: "DEAD" },
+          })
+          .catch(() => {});
+
         sseBroadcaster.broadcast({
           type: "device_status_changed",
           deviceId,

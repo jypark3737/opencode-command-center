@@ -1,10 +1,13 @@
 import type { WebSocket } from "ws";
-import type { RegisterMessage, RegisterAckMessage } from "@opencode-cc/shared";
+import type {
+  RegisterMessage,
+  RegisterAckMessage,
+  DiscoverSessionsMessage,
+} from "@opencode-cc/shared";
 import { agentRegistry } from "../registry";
 import { db } from "../../db";
 import { validateApiKey } from "../../auth";
 import { sseBroadcaster } from "../sse";
-import { dispatchPendingTasks } from "../dispatcher";
 
 export async function handleRegister(
   ws: WebSocket,
@@ -48,7 +51,6 @@ export async function handleRegister(
     hostname: msg.hostname,
     ws,
     connectedAt: new Date(),
-    activeTaskId: null,
     projects: msg.projects,
   });
 
@@ -70,6 +72,9 @@ export async function handleRegister(
 
   console.log(`[WS] Agent registered: ${msg.deviceName} (${msg.deviceId})`);
 
-  // Try to dispatch any pending tasks for this agent's projects
-  await dispatchPendingTasks(msg.deviceId);
+  // Ask daemon to discover its opencode sessions
+  const discoverMsg: DiscoverSessionsMessage = {
+    type: "discover_sessions",
+  };
+  ws.send(JSON.stringify(discoverMsg));
 }

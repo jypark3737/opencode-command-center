@@ -24,6 +24,14 @@ export function TaskList({ projectId }: TaskListProps) {
     onSuccess: () => utils.tasks.listByProject.invalidate({ projectId }),
   });
 
+  const assignToSession = trpcReact.tasks.assignToSession.useMutation({
+    onSuccess: () => {
+      utils.tasks.listByProject.invalidate({ projectId });
+      utils.sessions.list.invalidate();
+      utils.sessions.listByDevice.invalidate();
+    },
+  });
+
   const requestReview = trpcReact.admin.reviewTask.useMutation({
     onSuccess: () => utils.tasks.listByProject.invalidate({ projectId }),
   });
@@ -49,14 +57,28 @@ export function TaskList({ projectId }: TaskListProps) {
           utils.tasks.listByProject.invalidate({ projectId });
         } else if (event.type === "subtodos_updated") {
           utils.tasks.listByProject.invalidate({ projectId });
+        } else if (
+          event.type === "session_status_changed"
+        ) {
+          utils.sessions.list.invalidate();
+          utils.sessions.listByDevice.invalidate();
+        } else if (
+          event.type === "task_verification_result" &&
+          event.projectId === projectId
+        ) {
+          utils.tasks.listByProject.invalidate({ projectId });
         }
       },
       [projectId, utils]
     )
   );
 
-  async function handleCreateTask(title: string, description: string) {
-    await createTask.mutateAsync({ projectId, title, description });
+  async function handleCreateTask(title: string, description: string, sessionId?: string) {
+    const created = await createTask.mutateAsync({ projectId, title, description, sessionId });
+    // If sessionId was provided, also assign the task
+    if (sessionId && created.id) {
+      await assignToSession.mutateAsync({ taskId: created.id, sessionId });
+    }
   }
 
   if (isLoading) {
@@ -104,36 +126,45 @@ export function TaskList({ projectId }: TaskListProps) {
             No tasks yet. Add one below.
           </div>
         ) : (
-          taskList.map((task) => (
-            <TaskCard
-              key={task.id}
-              id={task.id}
-              title={task.title}
-              status={task.status as TaskStatus}
-              subTodos={task.subTodos.map((st) => ({
-                content: st.content,
-                checked: st.checked,
-                position: st.position,
-              }))}
-              result={
-                task.result
-                  ? {
-                      summary: task.result.summary,
-                      filesChanged: task.result.filesChanged as Array<{
-                        path: string;
-                        status: "added" | "modified" | "deleted";
-                        additions: number;
-                        deletions: number;
-                      }>,
-                      tokensUsed: task.result.tokensUsed,
-                      durationMs: task.result.durationMs,
-                      adminReview: task.result.adminReview as { verdict: string; notes: string } | null,
-                    }
-                  : null
-              }
-              onRequestReview={(taskId) => requestReview.mutate({ taskId })}
-            />
-          ))
+          taskList.map((task) => {
+            const sessionPath = task.session?.projectPath;
+            const verification = task.result?.verification as
+              | { passed: boolean; type: string }
+              | null
+              | undefined;
+            return (
+              <TaskCard
+                key={task.id}
+                id={task.id}
+                title={task.title}
+                status={task.status as TaskStatus}
+                sessionPath={sessionPath ?? undefined}
+                verificationResult={verification ?? undefined}
+                subTodos={task.subTodos.map((st) => ({
+                  content: st.content,
+                  checked: st.checked,
+                  position: st.position,
+                }))}
+                result={
+                  task.result
+                    ? {
+                        summary: task.result.summary,
+                        filesChanged: task.result.filesChanged as Array<{
+                          path: string;
+                          status: "added" | "modified" | "deleted";
+                          additions: number;
+                          deletions: number;
+                        }>,
+                        tokensUsed: task.result.tokensUsed,
+                        durationMs: task.result.durationMs,
+                        adminReview: task.result.adminReview as { verdict: string; notes: string } | null,
+                      }
+                    : null
+                }
+                onRequestReview={(taskId) => requestReview.mutate({ taskId })}
+              />
+            );
+          })
         )}
 
         {/* Create form */}

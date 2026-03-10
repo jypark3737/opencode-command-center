@@ -3,7 +3,6 @@ import type {
   HeartbeatMessage,
   HeartbeatAckMessage,
 } from "@opencode-cc/shared";
-import { agentRegistry } from "../registry";
 import { db } from "../../db";
 
 export async function handleHeartbeat(
@@ -22,9 +21,6 @@ export async function handleHeartbeat(
     .catch(() => {
       // Device may not exist yet if registration is in flight
     });
-
-  // Update registry
-  agentRegistry.setActiveTask(msg.deviceId, msg.activeTaskId);
 
   // Send ack
   const ack: HeartbeatAckMessage = {

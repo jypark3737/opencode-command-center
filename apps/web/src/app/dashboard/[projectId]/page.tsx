@@ -1,4 +1,4 @@
-import { TaskList } from "@/components/tasks/TaskList";
+import { ProjectPageClient } from "./ProjectPageClient";
 
 export default async function ProjectPage({
   params,
@@ -6,5 +6,5 @@ export default async function ProjectPage({
   params: Promise<{ projectId: string }>;
 }) {
   const { projectId } = await params;
-  return <TaskList projectId={projectId} />;
+  return <ProjectPageClient projectId={projectId} />;
 }

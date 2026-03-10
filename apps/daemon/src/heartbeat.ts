@@ -6,15 +6,10 @@ export class HeartbeatSender {
   private timer: ReturnType<typeof setInterval> | null = null;
   private client: CommandCenterClient;
   private config: DaemonConfig;
-  private activeTaskId: string | null = null;
 
   constructor(client: CommandCenterClient, config: DaemonConfig) {
     this.client = client;
     this.config = config;
-  }
-
-  setActiveTask(taskId: string | null): void {
-    this.activeTaskId = taskId;
   }
 
   start(): void {
@@ -24,7 +19,7 @@ export class HeartbeatSender {
         deviceId: this.config.deviceId,
         timestamp: Date.now(),
         opencodeRunning: true,
-        activeTaskId: this.activeTaskId,
+        activeTaskId: null,
       });
     }, 30_000);
 

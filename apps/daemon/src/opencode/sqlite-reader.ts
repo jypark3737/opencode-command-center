@@ -2,19 +2,43 @@ import { Database } from "bun:sqlite";
 import { logger } from "../logger";
 import type { SubTodoUpdate } from "@opencode-cc/shared";
 
-const OPENCODE_DB_PATH =
-  process.env.OPENCODE_DB_PATH ??
-  `${process.env.HOME}/.local/share/opencode/opencode.db`;
+export interface DiscoveredSession {
+  opencodeSessionId: string;
+  projectPath: string;
+}
 
 export class OpenCodeSQLiteReader {
   private db: Database | null = null;
+  private dbPath: string;
+
+  constructor(dbPath: string) {
+    this.dbPath = dbPath;
+  }
 
   connect(): void {
     try {
-      this.db = new Database(OPENCODE_DB_PATH, { readonly: true });
-      logger.info(`Connected to opencode SQLite at ${OPENCODE_DB_PATH}`);
+      this.db = new Database(this.dbPath, { readonly: true });
+      logger.info(`Connected to opencode SQLite at ${this.dbPath}`);
     } catch (err) {
       logger.warn(`Could not connect to opencode SQLite: ${err}`);
+    }
+  }
+
+  discoverSessions(): DiscoveredSession[] {
+    if (!this.db) return [];
+    try {
+      // OpenCode stores sessions with id and path fields
+      const rows = this.db
+        .query("SELECT id, path FROM session ORDER BY created_at DESC")
+        .all() as Array<{ id: string; path: string }>;
+
+      return rows.map((row) => ({
+        opencodeSessionId: row.id,
+        projectPath: row.path,
+      }));
+    } catch (err) {
+      logger.warn(`Failed to discover sessions from SQLite: ${err}`);
+      return [];
     }
   }
 

@@ -5,36 +5,47 @@ export class OpenCodeProcess {
   private proc: Subprocess | null = null;
   private port: number;
   private opencodeBin: string;
-  private crashHandler: (() => void) | null = null;
+  private projectPath: string;
   private restartCount = 0;
   private readonly maxRestarts = 3;
+  private onCrashHandler: (() => void) | null = null;
 
-  constructor(opencodeBin: string = "opencode") {
+  constructor(opencodeBin: string, projectPath: string, port?: number) {
     this.opencodeBin = opencodeBin;
-    // Pick a random port between 10000-20000
-    this.port = Math.floor(Math.random() * 10000) + 10000;
+    this.projectPath = projectPath;
+    this.port = port ?? Math.floor(Math.random() * 10000) + 10000;
   }
 
   getPort(): number {
     return this.port;
   }
 
+  getProjectPath(): string {
+    return this.projectPath;
+  }
+
   async start(): Promise<void> {
-    logger.info(`Starting opencode serve on port ${this.port}`);
+    logger.info(
+      `Starting opencode serve on port ${this.port} for ${this.projectPath}`
+    );
 
-    this.proc = spawn([this.opencodeBin, "serve", "--port", String(this.port)], {
-      stdout: "pipe",
-      stderr: "pipe",
-    });
+    this.proc = spawn(
+      [this.opencodeBin, "serve", "--port", String(this.port)],
+      {
+        stdout: "pipe",
+        stderr: "pipe",
+        cwd: this.projectPath,
+      }
+    );
 
-    // Wait for opencode to be ready
     await this.waitForReady();
     logger.info(`opencode ready on port ${this.port}`);
 
-    // Monitor for crashes
     this.proc.exited.then((code) => {
-      logger.warn(`opencode process exited with code ${code}`);
-      if (this.crashHandler) this.crashHandler();
+      logger.warn(
+        `opencode process (port ${this.port}) exited with code ${code}`
+      );
+      if (this.onCrashHandler) this.onCrashHandler();
       this.handleCrash();
     });
   }
@@ -43,7 +54,7 @@ export class OpenCodeProcess {
     for (let i = 0; i < maxAttempts; i++) {
       try {
         const res = await fetch(`http://localhost:${this.port}/`);
-        if (res.ok || res.status === 404) return; // Any response means it's up
+        if (res.ok || res.status === 404) return;
       } catch {
         // Not ready yet
       }
@@ -54,11 +65,15 @@ export class OpenCodeProcess {
 
   private async handleCrash(): Promise<void> {
     if (this.restartCount >= this.maxRestarts) {
-      logger.error(`opencode crashed ${this.maxRestarts} times, giving up`);
+      logger.error(
+        `opencode (port ${this.port}) crashed ${this.maxRestarts} times, giving up`
+      );
       return;
     }
     this.restartCount++;
-    logger.info(`Restarting opencode (attempt ${this.restartCount})`);
+    logger.info(
+      `Restarting opencode on port ${this.port} (attempt ${this.restartCount})`
+    );
     await Bun.sleep(2000);
     await this.start();
   }
@@ -75,6 +90,6 @@ export class OpenCodeProcess {
   }
 
   onCrash(handler: () => void): void {
-    this.crashHandler = handler;
+    this.onCrashHandler = handler;
   }
 }

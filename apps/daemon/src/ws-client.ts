@@ -33,7 +33,7 @@ export class CommandCenterClient {
       this.ws.on("open", () => {
         logger.info("Connected to Command Center");
         this.connected = true;
-        this.reconnectDelay = 1000; // Reset backoff
+        this.reconnectDelay = 1000;
         this.sendRegister();
         resolve();
       });
@@ -90,7 +90,7 @@ export class CommandCenterClient {
       deviceName: this.config.deviceName,
       hostname: this.config.hostname,
       apiKey: this.config.apiKey,
-      projects: this.config.projects,
+      projects: [],
     };
     this.send(msg);
   }

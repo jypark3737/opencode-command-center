@@ -4,6 +4,7 @@ import { projectsRouter } from "./routers/projects";
 import { tasksRouter } from "./routers/tasks";
 import { resultsRouter } from "./routers/results";
 import { adminRouter } from "./routers/admin";
+import { sessionsRouter } from "./routers/sessions";
 
 export const appRouter = createTRPCRouter({
   devices: devicesRouter,
@@ -11,6 +12,7 @@ export const appRouter = createTRPCRouter({
   tasks: tasksRouter,
   results: resultsRouter,
   admin: adminRouter,
+  sessions: sessionsRouter,
 });
 
 export type AppRouter = typeof appRouter;

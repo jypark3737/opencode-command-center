@@ -35,6 +35,8 @@ export const projectsRouter = createTRPCRouter({
         path: z.string().min(1),
         description: z.string().optional(),
         deviceId: z.string(),
+        verificationType: z.enum(["NONE", "BUILD", "LLM", "BUILD_AND_LLM"]).optional(),
+        verifyCommand: z.string().optional(),
       })
     )
     .mutation(async ({ input }) => {
@@ -47,6 +49,8 @@ export const projectsRouter = createTRPCRouter({
         id: z.string(),
         name: z.string().min(1).optional(),
         description: z.string().optional(),
+        verificationType: z.enum(["NONE", "BUILD", "LLM", "BUILD_AND_LLM"]).optional(),
+        verifyCommand: z.string().optional(),
       })
     )
     .mutation(async ({ input }) => {

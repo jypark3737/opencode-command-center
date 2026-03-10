@@ -6,7 +6,6 @@ export interface AgentConnection {
   hostname: string;
   ws: WebSocket;
   connectedAt: Date;
-  activeTaskId: string | null;
   projects: Array<{ path: string; name: string }>;
 }
 
@@ -33,11 +32,6 @@ class AgentRegistry {
     return this.getAll().find((conn) =>
       conn.projects.some((p) => p.path === projectPath)
     );
-  }
-
-  setActiveTask(deviceId: string, taskId: string | null): void {
-    const conn = this.connections.get(deviceId);
-    if (conn) conn.activeTaskId = taskId;
   }
 
   isConnected(deviceId: string): boolean {

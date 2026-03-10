@@ -28,4 +28,22 @@ export type DashboardEvent =
       taskId: string;
       projectId: string;
       error: string;
+    }
+  | {
+      type: "session_discovered";
+      deviceId: string;
+      sessionId: string;
+      projectPath: string;
+    }
+  | {
+      type: "session_status_changed";
+      sessionId: string;
+      deviceId: string;
+      status: string;
+    }
+  | {
+      type: "task_verification_result";
+      taskId: string;
+      projectId: string;
+      passed: boolean;
     };

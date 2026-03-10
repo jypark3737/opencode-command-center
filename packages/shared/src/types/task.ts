@@ -14,7 +14,7 @@ export interface Task {
   status: TaskStatus;
   position: number;
   assignedDeviceId: string | null;
-  opencodeSessionId: string | null;
+  sessionId: string | null;
   createdAt: Date;
   startedAt: Date | null;
   completedAt: Date | null;

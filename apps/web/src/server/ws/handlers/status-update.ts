@@ -8,26 +8,29 @@ import { sseBroadcaster } from "../sse";
 export async function handleTaskStarted(
   msg: TaskStartedMessage
 ): Promise<void> {
-  await db.task.update({
+  const task = await db.task.update({
     where: { id: msg.taskId },
     data: {
       status: "RUNNING",
       opencodeSessionId: msg.opencodeSessionId,
       startedAt: new Date(msg.timestamp),
     },
+    select: { projectId: true, sessionId: true },
   });
 
-  // Get projectId for SSE event
-  const task = await db.task.findUnique({
-    where: { id: msg.taskId },
-    select: { projectId: true },
-  });
+  // Also update Session status to BUSY if task has a session
+  if (task.sessionId) {
+    await db.session.update({
+      where: { id: task.sessionId },
+      data: { status: "BUSY", lastActiveAt: new Date() },
+    });
+  }
 
   sseBroadcaster.broadcast({
     type: "task_status_changed",
     taskId: msg.taskId,
     status: "RUNNING",
-    projectId: task?.projectId ?? "",
+    projectId: task.projectId,
   });
 
   console.log(`[WS] Task started: ${msg.taskId} on device ${msg.deviceId}`);

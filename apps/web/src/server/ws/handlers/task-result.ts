@@ -2,21 +2,21 @@ import type {
   TaskCompletedMessage,
   TaskFailedMessage,
 } from "@opencode-cc/shared";
-import { agentRegistry } from "../registry";
 import { db } from "../../db";
 import { sseBroadcaster } from "../sse";
-import { dispatchPendingTasks } from "../dispatcher";
+import { dispatchToSession } from "../dispatcher";
 
 export async function handleTaskCompleted(
   msg: TaskCompletedMessage
 ): Promise<void> {
   // Update task status
-  await db.task.update({
+  const task = await db.task.update({
     where: { id: msg.taskId },
     data: {
       status: "DONE",
       completedAt: new Date(msg.timestamp),
     },
+    select: { projectId: true, sessionId: true },
   });
 
   // Store result
@@ -31,51 +31,56 @@ export async function handleTaskCompleted(
     },
   });
 
-  // Clear active task from registry
-  agentRegistry.setActiveTask(msg.deviceId, null);
-
-  // Get projectId for SSE
-  const task = await db.task.findUnique({
-    where: { id: msg.taskId },
-    select: { projectId: true },
-  });
+  // Update session to IDLE if task had a session
+  if (task.sessionId) {
+    await db.session.update({
+      where: { id: task.sessionId },
+      data: { status: "IDLE", lastActiveAt: new Date() },
+    });
+  }
 
   sseBroadcaster.broadcast({
     type: "task_completed",
     taskId: msg.taskId,
-    projectId: task?.projectId ?? "",
+    projectId: task.projectId,
   });
 
   console.log(`[WS] Task completed: ${msg.taskId}`);
 
-  // Dispatch next pending task for this device
-  await dispatchPendingTasks(msg.deviceId);
+  // Dispatch next pending task for this session
+  if (task.sessionId) {
+    await dispatchToSession(task.sessionId);
+  }
 }
 
 export async function handleTaskFailed(
   msg: TaskFailedMessage
 ): Promise<void> {
-  await db.task.update({
+  const task = await db.task.update({
     where: { id: msg.taskId },
     data: { status: "FAILED" },
+    select: { projectId: true, sessionId: true },
   });
 
-  agentRegistry.setActiveTask(msg.deviceId, null);
-
-  const task = await db.task.findUnique({
-    where: { id: msg.taskId },
-    select: { projectId: true },
-  });
+  // Update session to IDLE if task had a session
+  if (task.sessionId) {
+    await db.session.update({
+      where: { id: task.sessionId },
+      data: { status: "IDLE", lastActiveAt: new Date() },
+    });
+  }
 
   sseBroadcaster.broadcast({
     type: "task_failed",
     taskId: msg.taskId,
-    projectId: task?.projectId ?? "",
+    projectId: task.projectId,
     error: msg.error,
   });
 
   console.log(`[WS] Task failed: ${msg.taskId} — ${msg.error}`);
 
-  // Try next task
-  await dispatchPendingTasks(msg.deviceId);
+  // Try next task for this session
+  if (task.sessionId) {
+    await dispatchToSession(task.sessionId);
+  }
 }

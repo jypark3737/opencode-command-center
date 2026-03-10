@@ -58,10 +58,43 @@ export interface TaskFailedMessage {
   timestamp: number;
 }
 
+export interface SessionsDiscoveredMessage {
+  type: "sessions_discovered";
+  deviceId: string;
+  sessions: Array<{
+    opencodeSessionId: string;
+    projectPath: string;
+    port?: number;
+  }>;
+}
+
+export interface SessionStatusMessage {
+  type: "session_status";
+  deviceId: string;
+  sessionId: string;
+  status: "IDLE" | "BUSY" | "DEAD";
+}
+
+export interface TaskVerificationMessage {
+  type: "task_verification";
+  taskId: string;
+  deviceId: string;
+  verification: {
+    passed: boolean;
+    type: string;
+    buildOutput?: string;
+    llmVerdict?: string;
+    llmNotes?: string;
+  };
+}
+
 export type ClientMessage =
   | RegisterMessage
   | HeartbeatMessage
   | TaskStartedMessage
   | SubTodosUpdatedMessage
   | TaskCompletedMessage
-  | TaskFailedMessage;
+  | TaskFailedMessage
+  | SessionsDiscoveredMessage
+  | SessionStatusMessage
+  | TaskVerificationMessage;

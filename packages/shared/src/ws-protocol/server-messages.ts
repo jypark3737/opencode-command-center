@@ -8,9 +8,14 @@ export interface RegisterAckMessage {
 export interface AssignTaskMessage {
   type: "assign_task";
   taskId: string;
+  sessionId: string;
   projectPath: string;
   title: string;
   description: string;
+  verification: {
+    type: string;
+    command?: string;
+  };
 }
 
 export interface CancelTaskMessage {
@@ -23,8 +28,20 @@ export interface HeartbeatAckMessage {
   timestamp: number;
 }
 
+export interface CreateSessionMessage {
+  type: "create_session";
+  sessionId: string;
+  projectPath: string;
+}
+
+export interface DiscoverSessionsMessage {
+  type: "discover_sessions";
+}
+
 export type ServerMessage =
   | RegisterAckMessage
   | AssignTaskMessage
   | CancelTaskMessage
-  | HeartbeatAckMessage;
+  | HeartbeatAckMessage
+  | CreateSessionMessage
+  | DiscoverSessionsMessage;
