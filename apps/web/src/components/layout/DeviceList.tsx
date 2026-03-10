@@ -1,0 +1,74 @@
+"use client";
+
+import { useCallback } from "react";
+import { trpcReact } from "@/lib/trpc-client";
+import { useSSE } from "@/hooks/useSSE";
+import type { DashboardEvent } from "@opencode-cc/shared";
+import type { DeviceStatus } from "@opencode-cc/shared";
+
+const STATUS_COLOR: Record<DeviceStatus, string> = {
+  ONLINE: "#22c55e",
+  OFFLINE: "#6b7280",
+  STALE: "#f59e0b",
+};
+
+export function DeviceList() {
+  const utils = trpcReact.useUtils();
+  const { data: devices } = trpcReact.devices.list.useQuery();
+
+  // Real-time device status updates
+  useSSE(
+    useCallback(
+      (event: DashboardEvent) => {
+        if (event.type === "device_status_changed") {
+          utils.devices.list.invalidate();
+        }
+      },
+      [utils]
+    )
+  );
+
+  const deviceList = devices ?? [];
+
+  if (deviceList.length === 0) {
+    return (
+      <p style={{ fontSize: 12, color: "#555", padding: "4px 8px", margin: 0 }}>
+        No devices registered
+      </p>
+    );
+  }
+
+  return (
+    <ul style={{ listStyle: "none", margin: 0, padding: 0 }}>
+      {deviceList.map((d) => (
+        <li
+          key={d.id}
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 8,
+            padding: "6px 8px",
+            fontSize: 13,
+            color: "#ccc",
+          }}
+        >
+          <span
+            style={{
+              width: 6,
+              height: 6,
+              borderRadius: "50%",
+              background: STATUS_COLOR[d.status as DeviceStatus] ?? "#6b7280",
+              flexShrink: 0,
+            }}
+          />
+          <span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+            {d.name}
+          </span>
+          <span style={{ fontSize: 10, color: "#555" }}>
+            {d.status.toLowerCase()}
+          </span>
+        </li>
+      ))}
+    </ul>
+  );
+}

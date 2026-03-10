@@ -1,0 +1,53 @@
+import type { WebSocket } from "ws";
+
+export interface AgentConnection {
+  deviceId: string;
+  deviceName: string;
+  hostname: string;
+  ws: WebSocket;
+  connectedAt: Date;
+  activeTaskId: string | null;
+  projects: Array<{ path: string; name: string }>;
+}
+
+class AgentRegistry {
+  private connections = new Map<string, AgentConnection>();
+
+  register(conn: AgentConnection): void {
+    this.connections.set(conn.deviceId, conn);
+  }
+
+  unregister(deviceId: string): void {
+    this.connections.delete(deviceId);
+  }
+
+  get(deviceId: string): AgentConnection | undefined {
+    return this.connections.get(deviceId);
+  }
+
+  getAll(): AgentConnection[] {
+    return Array.from(this.connections.values());
+  }
+
+  getByProjectPath(projectPath: string): AgentConnection | undefined {
+    return this.getAll().find((conn) =>
+      conn.projects.some((p) => p.path === projectPath)
+    );
+  }
+
+  setActiveTask(deviceId: string, taskId: string | null): void {
+    const conn = this.connections.get(deviceId);
+    if (conn) conn.activeTaskId = taskId;
+  }
+
+  isConnected(deviceId: string): boolean {
+    return this.connections.has(deviceId);
+  }
+
+  size(): number {
+    return this.connections.size;
+  }
+}
+
+// Singleton — shared across the process
+export const agentRegistry = new AgentRegistry();

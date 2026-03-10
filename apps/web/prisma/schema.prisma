@@ -1,0 +1,103 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum DeviceStatus {
+  ONLINE
+  OFFLINE
+  STALE
+}
+
+enum TaskStatus {
+  PENDING
+  ASSIGNED
+  RUNNING
+  DONE
+  FAILED
+  CANCELLED
+}
+
+model Device {
+  id            String       @id @default(cuid())
+  name          String
+  hostname      String
+  status        DeviceStatus @default(OFFLINE)
+  lastHeartbeat DateTime?
+  registeredAt  DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+
+  projects        Project[]
+  taskAssignments Task[]    @relation("AssignedDevice")
+
+  @@map("devices")
+}
+
+model Project {
+  id          String   @id @default(cuid())
+  name        String
+  path        String
+  description String?
+  deviceId    String
+  device      Device   @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  tasks Task[]
+
+  @@unique([deviceId, path])
+  @@map("projects")
+}
+
+model Task {
+  id                String     @id @default(cuid())
+  projectId         String
+  project           Project    @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  title             String
+  description       String?
+  status            TaskStatus @default(PENDING)
+  position          Int        @default(0)
+  assignedDeviceId  String?
+  assignedDevice    Device?    @relation("AssignedDevice", fields: [assignedDeviceId], references: [id])
+  opencodeSessionId String?
+  createdAt         DateTime   @default(now())
+  startedAt         DateTime?
+  completedAt       DateTime?
+  updatedAt         DateTime   @updatedAt
+
+  subTodos SubTodo[]
+  result   TaskResult?
+
+  @@map("tasks")
+}
+
+model SubTodo {
+  id        String   @id @default(cuid())
+  taskId    String
+  task      Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  content   String
+  checked   Boolean  @default(false)
+  position  Int      @default(0)
+  updatedAt DateTime @updatedAt
+
+  @@map("sub_todos")
+}
+
+model TaskResult {
+  id             String   @id @default(cuid())
+  taskId         String   @unique
+  task           Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  summary        String
+  filesChanged   Json     @default("[]")
+  tokensUsed     Int      @default(0)
+  durationMs     Int      @default(0)
+  fullTranscript Json     @default("{}")
+  adminReview    Json?
+  createdAt      DateTime @default(now())
+
+  @@map("task_results")
+}

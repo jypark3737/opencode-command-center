@@ -1,0 +1,19 @@
+FROM oven/bun:1.3 AS base
+WORKDIR /app
+
+FROM base AS deps
+COPY package.json bun.lock turbo.json ./
+COPY apps/daemon/package.json ./apps/daemon/
+COPY packages/shared/package.json ./packages/shared/
+RUN bun install --frozen-lockfile
+
+FROM deps AS shared-build
+COPY packages/shared ./packages/shared
+RUN cd packages/shared && bun run build
+
+FROM shared-build AS runner
+COPY apps/daemon ./apps/daemon
+
+ENV NODE_ENV=production
+
+CMD ["bun", "run", "apps/daemon/src/index.ts"]
