@@ -27,14 +27,14 @@ export class OpenCodeSQLiteReader {
   discoverSessions(): DiscoveredSession[] {
     if (!this.db) return [];
     try {
-      // OpenCode stores sessions with id and path fields
+      // OpenCode schema: session(id, directory, title, time_created, ...)
       const rows = this.db
-        .query("SELECT id, path FROM session ORDER BY created_at DESC")
-        .all() as Array<{ id: string; path: string }>;
+        .query("SELECT id, directory FROM session ORDER BY time_created DESC")
+        .all() as Array<{ id: string; directory: string }>;
 
       return rows.map((row) => ({
         opencodeSessionId: row.id,
-        projectPath: row.path,
+        projectPath: row.directory,
       }));
     } catch (err) {
       logger.warn(`Failed to discover sessions from SQLite: ${err}`);
