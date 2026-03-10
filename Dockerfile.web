@@ -11,9 +11,10 @@ RUN bun install
 COPY packages/shared ./packages/shared
 RUN cd packages/shared && bun run build
 
-# Build web app
+# Build web app (NEXT_PUBLIC_ vars must be available at build time)
+ARG NEXT_PUBLIC_API_KEY
 COPY apps/web ./apps/web
-RUN cd apps/web && bunx prisma generate && bun run build
+RUN cd apps/web && bunx prisma generate && NEXT_PUBLIC_API_KEY=${NEXT_PUBLIC_API_KEY} bun run build
 
 WORKDIR /app/apps/web
 ENV NODE_ENV=production
