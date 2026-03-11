@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback } from "react";
+import Link from "next/link";
 import { trpcReact } from "@/lib/trpc-client";
 import { useSSE } from "@/hooks/useSSE";
 import type { DashboardEvent, SessionStatus } from "@opencode-cc/shared";
@@ -64,49 +65,62 @@ export function SessionList({ deviceId, onCreateSession }: SessionListProps) {
                   color: "#bbb",
                 }}
               >
-                <span
+                <Link
+                  href={"/dashboard/sessions/" + s.id}
                   style={{
-                    display: "inline-flex",
+                    display: "flex",
                     alignItems: "center",
-                    padding: "1px 6px",
-                    borderRadius: 10,
-                    fontSize: 10,
-                    fontWeight: 500,
-                    color: cfg.color,
-                    background: cfg.bg,
-                    flexShrink: 0,
-                  }}
-                >
-                  {statusKey.toLowerCase()}
-                </span>
-                <span
-                  style={{
+                    gap: 6,
+                    textDecoration: "none",
+                    color: "inherit",
                     flex: 1,
-                    overflow: "hidden",
-                    textOverflow: "ellipsis",
-                    whiteSpace: "nowrap",
-                    color: "#999",
-                    fontSize: 11,
+                    minWidth: 0,
                   }}
-                  title={s.projectPath}
                 >
-                  {truncatePath(s.projectPath)}
-                </span>
-                {statusKey === "BUSY" && s.currentTask && (
                   <span
                     style={{
+                      display: "inline-flex",
+                      alignItems: "center",
+                      padding: "1px 6px",
+                      borderRadius: 10,
                       fontSize: 10,
-                      color: "#6366f1",
+                      fontWeight: 500,
+                      color: cfg.color,
+                      background: cfg.bg,
+                      flexShrink: 0,
+                    }}
+                  >
+                    {statusKey.toLowerCase()}
+                  </span>
+                  <span
+                    style={{
+                      flex: 1,
                       overflow: "hidden",
                       textOverflow: "ellipsis",
                       whiteSpace: "nowrap",
-                      maxWidth: 80,
+                      color: "#999",
+                      fontSize: 11,
                     }}
-                    title={s.currentTask.title}
+                    title={s.title ?? s.projectPath}
                   >
-                    {s.currentTask.title}
+                    {s.title ?? truncatePath(s.projectPath)}
                   </span>
-                )}
+                  {statusKey === "BUSY" && s.currentTask && (
+                    <span
+                      style={{
+                        fontSize: 10,
+                        color: "#6366f1",
+                        overflow: "hidden",
+                        textOverflow: "ellipsis",
+                        whiteSpace: "nowrap",
+                        maxWidth: 80,
+                      }}
+                      title={s.currentTask.title}
+                    >
+                      {s.currentTask.title}
+                    </span>
+                  )}
+                </Link>
               </li>
             );
           })}

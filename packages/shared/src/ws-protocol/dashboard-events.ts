@@ -46,4 +46,33 @@ export type DashboardEvent =
       taskId: string;
       projectId: string;
       passed: boolean;
+    }
+  | {
+      type: "admin_todo_status_changed";
+      todoId: string;
+      oldStatus: string;
+      newStatus: string;
+      convertedInstruction?: string;
+      assignedSessionId?: string;
+    }
+  | {
+      type: "admin_orchestrator_status";
+      isProcessing: boolean;
+      currentAction: string;
+      queueLength: number;
+      lastError?: string;
+    }
+  | {
+      type: "admin_verification_result";
+      todoId: string;
+      passed: boolean;
+      feedback?: string;
+      retryCount: number;
+    }
+  | {
+      type: "admin_todo_escalated";
+      todoId: string;
+      content: string;
+      verificationNotes?: string;
+      retryCount: number;
     };

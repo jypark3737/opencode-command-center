@@ -13,7 +13,7 @@ export const tasksRouter = createTRPCRouter({
         include: {
           subTodos: { orderBy: { position: "asc" } },
           session: {
-            select: { id: true, status: true, projectPath: true },
+            select: { id: true, status: true, projectPath: true, title: true },
           },
           result: {
             select: {

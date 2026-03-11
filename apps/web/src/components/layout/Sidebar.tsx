@@ -1,5 +1,4 @@
 import Link from "next/link";
-import { ProjectList } from "./ProjectList";
 import { DeviceList } from "./DeviceList";
 
 export function Sidebar() {
@@ -42,38 +41,6 @@ export function Sidebar() {
 
       {/* Scrollable content */}
       <div style={{ flex: 1, overflowY: "auto", padding: "8px 0" }}>
-        {/* Projects */}
-        <div style={{ padding: "8px 12px" }}>
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "space-between",
-              marginBottom: 4,
-            }}
-          >
-            <span
-              style={{
-                fontSize: 11,
-                fontWeight: 500,
-                textTransform: "uppercase",
-                letterSpacing: "0.05em",
-                color: "#888",
-              }}
-            >
-              Projects
-            </span>
-            <Link
-              href="/dashboard"
-              style={{ fontSize: 11, color: "#888", textDecoration: "none" }}
-            >
-              + Add
-            </Link>
-          </div>
-          <ProjectList />
-        </div>
-
-        <div style={{ margin: "8px 12px", borderTop: "1px solid #2a2a2a" }} />
 
         {/* Devices */}
         <div style={{ padding: "8px 12px" }}>

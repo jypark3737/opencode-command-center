@@ -38,10 +38,19 @@ export interface DiscoverSessionsMessage {
   type: "discover_sessions";
 }
 
+export interface AdminRunCommandMessage {
+  type: "admin_run_command";
+  requestId: string;
+  command: string;
+  projectPath?: string;
+  sessionId?: string;
+}
+
 export type ServerMessage =
   | RegisterAckMessage
   | AssignTaskMessage
   | CancelTaskMessage
   | HeartbeatAckMessage
   | CreateSessionMessage
-  | DiscoverSessionsMessage;
+  | DiscoverSessionsMessage
+  | AdminRunCommandMessage;

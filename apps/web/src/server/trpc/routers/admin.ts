@@ -1,11 +1,7 @@
 import { z } from "zod";
 import { createTRPCRouter, protectedProcedure } from "../init";
 import { db } from "../../db";
-import Anthropic from "@anthropic-ai/sdk";
-
-const anthropic = new Anthropic({
-  apiKey: process.env.ANTHROPIC_API_KEY,
-});
+import { adminOrchestrator } from "../../admin-orchestrator";
 
 export const adminRouter = createTRPCRouter({
   getSystemStatus: protectedProcedure.query(async () => {
@@ -58,68 +54,95 @@ export const adminRouter = createTRPCRouter({
     return { staleDevices, stuckTasks };
   }),
 
-  reviewTask: protectedProcedure
-    .input(z.object({ taskId: z.string() }))
+  submitTodos: protectedProcedure
+    .input(z.object({ content: z.string().min(1) }))
     .mutation(async ({ input }) => {
-      const result = await db.taskResult.findUnique({
-        where: { taskId: input.taskId },
-        include: { task: { include: { project: true } } },
-      });
+      const lines = input.content
+        .split("\n")
+        .map((l) => l.trim())
+        .filter((l) => l.length > 0);
 
-      if (!result) throw new Error("No result found for task");
+      const created = await Promise.all(
+        lines.map((line) =>
+          db.adminTodo.create({
+            data: { content: line },
+          })
+        )
+      );
 
-      const filesChanged = result.filesChanged as Array<{ path: string; status: string }>;
-      const fileList = filesChanged.map((f) => `${f.status}: ${f.path}`).join("\n");
-
-      const prompt = `You are reviewing an AI coding task completion. Provide a brief, honest assessment.
-
-Task: ${result.task.title}
-Project: ${result.task.project.name}
-Description: ${result.task.description ?? "No description"}
-
-Summary of what was done:
-${result.summary}
-
-Files changed:
-${fileList || "No files recorded"}
-
-Tokens used: ${result.tokensUsed}
-Duration: ${Math.round(result.durationMs / 1000)}s
-
-Please provide:
-1. A one-line verdict (e.g., "Looks good", "Needs review", "Potential issues")
-2. 2-3 sentences of notes about the implementation quality, any concerns, or suggestions
-
-Format your response as:
-VERDICT: <one line>
-NOTES: <2-3 sentences>`;
-
-      const message = await anthropic.messages.create({
-        model: "claude-3-5-haiku-20241022",
-        max_tokens: 300,
-        messages: [{ role: "user", content: prompt }],
-      });
-
-      const responseText =
-        message.content[0].type === "text" ? message.content[0].text : "";
-
-      const verdictMatch = responseText.match(/VERDICT:\s*(.+)/);
-      const notesMatch = responseText.match(/NOTES:\s*([\s\S]+)/);
-
-      const verdict = verdictMatch?.[1]?.trim() ?? "Review complete";
-      const notes = notesMatch?.[1]?.trim() ?? responseText;
-
-      const adminReview = {
-        verdict,
-        notes,
-        reviewedAt: new Date().toISOString(),
-      };
-
-      await db.taskResult.update({
-        where: { taskId: input.taskId },
-        data: { adminReview },
-      });
-
-      return adminReview;
+      return created;
     }),
+
+  getTodos: protectedProcedure
+    .input(
+      z
+        .object({
+          status: z
+            .enum([
+              "PENDING",
+              "CONVERTING",
+              "READY",
+              "ASSIGNED",
+              "VERIFYING",
+              "DONE",
+              "FAILED",
+              "CANCELLED",
+            ])
+            .optional(),
+        })
+        .optional()
+    )
+    .query(async ({ input }) => {
+      return db.adminTodo.findMany({
+        where: input?.status ? { status: input.status } : undefined,
+        orderBy: { createdAt: "desc" },
+      });
+    }),
+
+  cancelTodo: protectedProcedure
+    .input(z.object({ id: z.string() }))
+    .mutation(async ({ input }) => {
+      return db.adminTodo.update({
+        where: { id: input.id },
+        data: { status: "CANCELLED" },
+      });
+    }),
+
+  getOrchestratorStatus: protectedProcedure.query(async () => {
+    const [pending, converting, ready, assigned, verifying] = await Promise.all([
+      db.adminTodo.count({ where: { status: "PENDING" } }),
+      db.adminTodo.count({ where: { status: "CONVERTING" } }),
+      db.adminTodo.count({ where: { status: "READY" } }),
+      db.adminTodo.count({ where: { status: "ASSIGNED" } }),
+      db.adminTodo.count({ where: { status: "VERIFYING" } }),
+    ]);
+
+    const isProcessing = converting > 0 || verifying > 0;
+    const queueLength = pending + converting + ready + assigned + verifying;
+
+    return {
+      isProcessing,
+      currentAction: converting > 0
+        ? "Converting todos to instructions..."
+        : verifying > 0
+        ? "Verifying completed tasks..."
+        : "idle",
+      queueLength,
+    };
+  }),
+
+  triggerOrchestration: protectedProcedure.mutation(async () => {
+    const convertResult = await adminOrchestrator.convertPendingTodos();
+    if (!convertResult.dispatched) {
+      // If nothing to convert, try assigning READY todos
+      const assignResult = await adminOrchestrator.assignReadyTodos();
+      return {
+        dispatched: false,
+        todoCount: 0,
+        assigned: assignResult.assigned,
+        reason: convertResult.reason,
+      };
+    }
+    return { dispatched: true, todoCount: convertResult.todoCount };
+  }),
 });

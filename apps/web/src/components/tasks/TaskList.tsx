@@ -32,9 +32,6 @@ export function TaskList({ projectId }: TaskListProps) {
     },
   });
 
-  const requestReview = trpcReact.admin.reviewTask.useMutation({
-    onSuccess: () => utils.tasks.listByProject.invalidate({ projectId }),
-  });
 
   // Real-time updates via SSE
   useSSE(
@@ -128,6 +125,7 @@ export function TaskList({ projectId }: TaskListProps) {
         ) : (
           taskList.map((task) => {
             const sessionPath = task.session?.projectPath;
+            const sessionTitle = task.session?.title;
             const verification = task.result?.verification as
               | { passed: boolean; type: string }
               | null
@@ -139,6 +137,7 @@ export function TaskList({ projectId }: TaskListProps) {
                 title={task.title}
                 status={task.status as TaskStatus}
                 sessionPath={sessionPath ?? undefined}
+                sessionTitle={sessionTitle ?? undefined}
                 verificationResult={verification ?? undefined}
                 subTodos={task.subTodos.map((st) => ({
                   content: st.content,
@@ -161,7 +160,7 @@ export function TaskList({ projectId }: TaskListProps) {
                       }
                     : null
                 }
-                onRequestReview={(taskId) => requestReview.mutate({ taskId })}
+                onRequestReview={() => {}}
               />
             );
           })

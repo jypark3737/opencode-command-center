@@ -1,5 +1,5 @@
 import { Sidebar } from "@/components/layout/Sidebar";
-import { AdminPanel } from "@/components/admin/AdminPanel";
+import { AdminTodoPanel } from "@/components/admin/AdminTodoPanel";
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   return (
@@ -9,7 +9,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         <div style={{ flex: 1 }}>
           {children}
         </div>
-        <AdminPanel />
+        <AdminTodoPanel />
       </main>
     </div>
   );

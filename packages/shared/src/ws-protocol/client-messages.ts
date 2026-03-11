@@ -64,6 +64,7 @@ export interface SessionsDiscoveredMessage {
   sessions: Array<{
     opencodeSessionId: string;
     projectPath: string;
+    title?: string;
     port?: number;
   }>;
 }
@@ -88,6 +89,15 @@ export interface TaskVerificationMessage {
   };
 }
 
+export interface AdminRunResultMessage {
+  type: "admin_run_result";
+  requestId: string;
+  deviceId: string;
+  output: string;
+  exitCode: number;
+  error?: string;
+}
+
 export type ClientMessage =
   | RegisterMessage
   | HeartbeatMessage
@@ -97,4 +107,5 @@ export type ClientMessage =
   | TaskFailedMessage
   | SessionsDiscoveredMessage
   | SessionStatusMessage
-  | TaskVerificationMessage;
+  | TaskVerificationMessage
+  | AdminRunResultMessage;

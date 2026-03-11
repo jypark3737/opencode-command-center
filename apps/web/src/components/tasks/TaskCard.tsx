@@ -39,6 +39,7 @@ interface TaskCardProps {
   subTodos: SubTodo[];
   result: TaskResult | null;
   sessionPath?: string;
+  sessionTitle?: string;
   verificationResult?: VerificationBadgeInfo;
   onRequestReview: (taskId: string) => void;
 }
@@ -56,6 +57,7 @@ export function TaskCard({
   subTodos,
   result,
   sessionPath,
+  sessionTitle,
   verificationResult,
   onRequestReview,
 }: TaskCardProps) {
@@ -122,7 +124,7 @@ export function TaskCard({
             }}
           >
             <span style={{ color: "#555" }}>⚡</span>
-            <span>Session: {truncatePath(sessionPath)}</span>
+            <span>Session: {sessionTitle ?? truncatePath(sessionPath)}</span>
           </div>
         )}
 

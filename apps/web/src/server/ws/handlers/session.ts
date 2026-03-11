@@ -30,6 +30,7 @@ export async function handleSessionsDiscovered(
           opencodeSessionId: sessionInfo.opencodeSessionId,
           projectPath: sessionInfo.projectPath,
           opencodePort: sessionInfo.port,
+          title: sessionInfo.title ?? undefined,
           status: "IDLE",
           lastActiveAt: new Date(),
         },
@@ -41,6 +42,7 @@ export async function handleSessionsDiscovered(
           projectPath: sessionInfo.projectPath,
           opencodeSessionId: sessionInfo.opencodeSessionId,
           opencodePort: sessionInfo.port,
+          title: sessionInfo.title ?? undefined,
           status: "IDLE",
         },
       });

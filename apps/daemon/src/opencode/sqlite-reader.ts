@@ -5,6 +5,7 @@ import type { SubTodoUpdate } from "@opencode-cc/shared";
 export interface DiscoveredSession {
   opencodeSessionId: string;
   projectPath: string;
+  title?: string;
 }
 
 export class OpenCodeSQLiteReader {
@@ -29,15 +30,66 @@ export class OpenCodeSQLiteReader {
     try {
       // OpenCode schema: session(id, directory, title, time_created, ...)
       const rows = this.db
-        .query("SELECT id, directory FROM session ORDER BY time_created DESC")
-        .all() as Array<{ id: string; directory: string }>;
+        .query("SELECT id, directory, title FROM session ORDER BY time_created DESC")
+        .all() as Array<{ id: string; directory: string; title: string | null }>;
 
       return rows.map((row) => ({
         opencodeSessionId: row.id,
         projectPath: row.directory,
+        title: row.title ?? undefined,
       }));
     } catch (err) {
       logger.warn(`Failed to discover sessions from SQLite: ${err}`);
+      return [];
+    }
+  }
+
+  /**
+   * Get the title of a specific session by its OpenCode session ID.
+   */
+  getSessionTitle(sessionId: string): string | null {
+    if (!this.db) return null;
+    try {
+      const row = this.db
+        .query("SELECT title FROM session WHERE id = ?")
+        .get(sessionId) as { title: string | null } | null;
+      return row?.title ?? null;
+    } catch (err) {
+      logger.warn(`Failed to get session title for ${sessionId}: ${err}`);
+      return null;
+    }
+  }
+
+  /**
+   * Get all sessions with their titles, directories, and creation times.
+   */
+  getAllSessionsWithTitles(): Array<{
+    id: string;
+    title?: string;
+    directory: string;
+    timeCreated: string;
+  }> {
+    if (!this.db) return [];
+    try {
+      const rows = this.db
+        .query(
+          "SELECT id, title, directory, time_created FROM session ORDER BY time_created DESC"
+        )
+        .all() as Array<{
+        id: string;
+        title?: string;
+        directory: string;
+        time_created: string;
+      }>;
+
+      return rows.map((row) => ({
+        id: row.id,
+        title: row.title ?? undefined,
+        directory: row.directory,
+        timeCreated: row.time_created,
+      }));
+    } catch (err) {
+      logger.warn(`Failed to get sessions with titles: ${err}`);
       return [];
     }
   }

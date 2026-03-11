@@ -1,0 +1,27 @@
+TypeScript Type Check Results
+==============================
+
+Command: cd /mnt/ssd_mnt1/pjy/opencode-command-center && bun run typecheck
+
+Output:
+-------
+$ turbo typecheck
+• turbo 2.8.15
+• Packages in scope: @opencode-cc/daemon, @opencode-cc/shared, @opencode-cc/web
+• Running typecheck in 3 packages
+• Remote caching disabled
+@opencode-cc/shared:typecheck: cache hit, replaying logs 70cd1cf232ff21cf
+@opencode-cc/shared:typecheck: $ tsc --noEmit
+@opencode-cc/shared:build: cache hit, replaying logs 6745b189ac5cceb0
+@opencode-cc/shared:build: $ tsc
+@opencode-cc/daemon:typecheck: cache hit, replaying logs 261e99eb649242c9
+@opencode-cc/daemon:typecheck: $ tsc --noEmit
+@opencode-cc/web:typecheck: cache miss, executing 1b15103d984f8ec1
+@opencode-cc/web:typecheck: $ tsc --noEmit
+
+ Tasks:    4 successful, 4 total
+Cached:    3 cached, 4 total
+  Time:    3.688s 
+
+Status: ✅ PASSED
+All type checks successful. No errors detected.

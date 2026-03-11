@@ -101,6 +101,7 @@ model Session {
   projectPath       String
   opencodeSessionId String?
   opencodePort      Int?
+  title             String?
   status            SessionStatus @default(DISCOVERED)
   createdAt         DateTime      @default(now())
   lastActiveAt      DateTime      @default(now())
@@ -137,4 +138,32 @@ model TaskResult {
   createdAt      DateTime @default(now())
 
   @@map("task_results")
+}
+
+enum AdminTodoStatus {
+  PENDING
+  CONVERTING
+  READY
+  ASSIGNED
+  VERIFYING
+  DONE
+  FAILED
+  CANCELLED
+}
+
+model AdminTodo {
+  id                   String          @id @default(cuid())
+  content              String
+  status               AdminTodoStatus @default(PENDING)
+  convertedInstruction String?
+  assignedSessionId    String?
+  assignedDeviceId     String?
+  retryCount           Int             @default(0)
+  maxRetries           Int             @default(3)
+  verificationNotes    String?
+  createdAt            DateTime        @default(now())
+  updatedAt            DateTime        @updatedAt
+  completedAt          DateTime?
+
+  @@map("admin_todos")
 }

@@ -1,3 +1,4 @@
+import { adminOrchestrator } from "../../admin-orchestrator";
 import type {
   TaskCompletedMessage,
   TaskFailedMessage,
@@ -50,6 +51,16 @@ export async function handleTaskCompleted(
   // Dispatch next pending task for this session
   if (task.sessionId) {
     await dispatchToSession(task.sessionId);
+  }
+
+  // Check if this task is associated with an AdminTodo and trigger verification
+  if (task.sessionId) {
+    const adminTodo = await db.adminTodo.findFirst({
+      where: { assignedSessionId: task.sessionId, status: "ASSIGNED" },
+    });
+    if (adminTodo) {
+      await adminOrchestrator.verifyCompletedTodos();
+    }
   }
 }
 

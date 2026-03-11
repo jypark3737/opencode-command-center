@@ -3,6 +3,7 @@ import { logger } from "./logger";
 import { CommandCenterClient } from "./ws-client";
 import { HeartbeatSender } from "./heartbeat";
 import { SessionManager } from "./session-manager";
+import { AdminCommandHandler } from "./admin-handler";
 import type { ServerMessage } from "@opencode-cc/shared";
 
 async function main() {
@@ -19,6 +20,9 @@ async function main() {
 
   // Initialize session manager
   const sessionManager = new SessionManager(config, client);
+
+  // Initialize admin command handler
+  const adminHandler = new AdminCommandHandler(config.opencodeBin, config.deviceId);
 
   // Handle messages from Command Center
   client.onMessage(async (msg: ServerMessage) => {
@@ -83,6 +87,28 @@ async function main() {
       case "cancel_task": {
         logger.info(`Task cancellation requested: ${msg.taskId}`);
         // TODO: implement cancellation
+        break;
+      }
+
+      case "admin_run_command": {
+        // Run async — don't block other messages
+        adminHandler
+          .handleCommand(msg)
+          .then((result) => {
+            client.send(result);
+          })
+          .catch((err) => {
+            const error = err instanceof Error ? err.message : String(err);
+            logger.error(`[Admin] Handler error: ${error}`);
+            client.send({
+              type: "admin_run_result",
+              requestId: msg.requestId,
+              deviceId: config.deviceId,
+              output: "",
+              exitCode: 1,
+              error,
+            });
+          });
         break;
       }
 

@@ -3,6 +3,7 @@
 import { useCallback, useState } from "react";
 import { trpcReact } from "@/lib/trpc-client";
 import { useSSE } from "@/hooks/useSSE";
+import Link from "next/link";
 import { SessionList } from "@/components/sessions/SessionList";
 import { CreateSessionForm } from "@/components/sessions/CreateSessionForm";
 import type { DashboardEvent } from "@opencode-cc/shared";
@@ -105,6 +106,27 @@ export function DeviceList() {
 
             {isExpanded && (
               <div style={{ borderLeft: "1px solid #2a2a2a", marginLeft: 12 }}>
+                {d.projects && d.projects.length > 0 && (
+                  <div>
+                    {d.projects.map((p) => (
+                      <Link key={p.id} href={`/dashboard/${p.id}`}
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 6,
+                          padding: "4px 8px",
+                          fontSize: 12,
+                          color: "#bbb",
+                          textDecoration: "none",
+                          borderRadius: 4,
+                        }}
+                      >
+                        <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#6366f1", flexShrink: 0 }} />
+                        <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.name}</span>
+                      </Link>
+                    ))}
+                  </div>
+                )}
                 <SessionList
                   deviceId={d.id}
                   onCreateSession={() => setShowCreateFor(d.id)}

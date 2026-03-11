@@ -143,7 +143,7 @@ export function TaskCreateForm({ projectId, onSubmit }: TaskCreateFormProps) {
               const shortPath = segments.length <= 2 ? segments.join("/") : "…/" + segments.slice(-2).join("/");
               return (
                 <option key={s.id} value={s.id}>
-                  {s.device.name} · {shortPath}
+                  {s.device.name} · {s.title ?? shortPath}
                 </option>
               );
             })}

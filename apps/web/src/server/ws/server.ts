@@ -16,6 +16,7 @@ import {
   handleSessionStatus,
   handleTaskVerification,
 } from "./handlers/session";
+import { handleAdminRunResult } from "./handlers/admin";
 import { db } from "../db";
 import { sseBroadcaster } from "./sse";
 
@@ -57,6 +58,8 @@ function setupWebSocketServer(server: WebSocketServer): void {
           await handleSessionStatus(msg);
         } else if (msg.type === "task_verification") {
           await handleTaskVerification(msg);
+        } else if (msg.type === "admin_run_result") {
+          await handleAdminRunResult(msg);
         }
       } catch (err) {
         console.error("[WS] Error handling message:", err);

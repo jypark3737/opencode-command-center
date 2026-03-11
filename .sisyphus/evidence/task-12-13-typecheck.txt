@@ -1,0 +1,18 @@
+$ turbo typecheck
+• turbo 2.8.15
+• Packages in scope: @opencode-cc/daemon, @opencode-cc/shared, @opencode-cc/web
+• Running typecheck in 3 packages
+• Remote caching disabled
+@opencode-cc/shared:typecheck: cache hit, replaying logs 70cd1cf232ff21cf
+@opencode-cc/shared:typecheck: $ tsc --noEmit
+@opencode-cc/shared:build: cache hit, replaying logs 6745b189ac5cceb0
+@opencode-cc/shared:build: $ tsc
+@opencode-cc/daemon:typecheck: cache hit, replaying logs 6bfd88edbca2515b
+@opencode-cc/daemon:typecheck: $ tsc --noEmit
+@opencode-cc/web:typecheck: cache miss, executing 5a7b7e04aa12ec3d
+@opencode-cc/web:typecheck: $ tsc --noEmit
+
+ Tasks:    4 successful, 4 total
+Cached:    3 cached, 4 total
+  Time:    1.771s 
+
