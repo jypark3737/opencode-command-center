@@ -131,6 +131,19 @@ export const adminRouter = createTRPCRouter({
     };
   }),
 
+  debugRegistry: protectedProcedure.query(async () => {
+    const { agentRegistry } = await import("../../ws/registry");
+    const connections = agentRegistry.getAll();
+    return {
+      size: agentRegistry.size(),
+      devices: connections.map((c) => ({
+        deviceId: c.deviceId,
+        deviceName: c.deviceName,
+        connectedAt: c.connectedAt,
+      })),
+    };
+  }),
+
   triggerOrchestration: protectedProcedure.mutation(async () => {
     const convertResult = await adminOrchestrator.convertPendingTodos();
     if (!convertResult.dispatched) {

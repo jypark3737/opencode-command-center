@@ -39,7 +39,15 @@ export class SessionManager {
    */
   async discoverSessions(): Promise<DiscoveredSession[]> {
     logger.info("Discovering existing OpenCode sessions...");
-    const discovered = this.sqliteReader.discoverSessions();
+    let discovered = this.sqliteReader.discoverSessions();
+
+    if (this.config.projectsFilter.length > 0) {
+      discovered = discovered.filter((s) =>
+        this.config.projectsFilter.some((prefix) => s.projectPath.startsWith(prefix))
+      );
+      logger.info(`Filtered to ${discovered.length} session(s) matching project filter`);
+    }
+
     logger.info(`Found ${discovered.length} existing session(s)`);
     return discovered;
   }

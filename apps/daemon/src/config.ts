@@ -9,6 +9,7 @@ export interface DaemonConfig {
   hostname: string;
   opencodeBin: string;
   opencodeDbPath: string;
+  projectsFilter: string[];
 }
 
 function normalized(value: string | undefined): string | undefined {
@@ -44,6 +45,12 @@ export function loadConfig(): DaemonConfig {
     "opencode.db"
   );
 
+  const filterRaw = normalized(process.env.PROJECTS_FILTER) ?? "";
+  const projectsFilter = filterRaw
+    .split(",")
+    .map((p) => p.trim())
+    .filter((p) => p.length > 0);
+
   return {
     commandCenterUrl: process.env.COMMAND_CENTER_URL!,
     apiKey: process.env.COMMAND_CENTER_API_KEY!,
@@ -52,5 +59,6 @@ export function loadConfig(): DaemonConfig {
     hostname: process.env.HOSTNAME ?? "unknown",
     opencodeBin: normalized(process.env.OPENCODE_BIN) ?? "opencode",
     opencodeDbPath: normalized(process.env.OPENCODE_DB_PATH) ?? defaultDbPath,
+    projectsFilter,
   };
 }
