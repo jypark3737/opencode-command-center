@@ -87,6 +87,15 @@ echo "  ║  Persistent agent with supervisord              ║"
 echo "  ╚══════════════════════════════════════════════════╝"
 echo ""
 
+# ─── Detect real user (when run with sudo) ──────────────────────────
+REAL_USER="${SUDO_USER:-$(whoami)}"
+REAL_HOME=$(eval echo "~$REAL_USER")
+if [ "$REAL_USER" != "root" ]; then
+  info "Detected real user: $REAL_USER (home: $REAL_HOME)"
+else
+  REAL_HOME="${HOME:-/root}"
+fi
+
 # ─── Detect Environment ─────────────────────────────────────────────
 IN_DOCKER=false
 if [ -f "/.dockerenv" ] || grep -q 'docker\|containerd' /proc/1/cgroup 2>/dev/null; then
@@ -176,12 +185,10 @@ if [ -z "${DEVICE_ID:-}" ]; then
   DEVICE_ID=$(cat /proc/sys/kernel/random/uuid 2>/dev/null || uuidgen 2>/dev/null || date +%s%N)
 fi
 
-# XDG paths
-: "${HOME:=/root}"
-: "${XDG_DATA_HOME:=$HOME/.local/share}"
-: "${XDG_CONFIG_HOME:=$HOME/.config}"
-: "${XDG_STATE_HOME:=$HOME/.local/state}"
-: "${XDG_CACHE_HOME:=$HOME/.cache}"
+: "${XDG_DATA_HOME:=$REAL_HOME/.local/share}"
+: "${XDG_CONFIG_HOME:=$REAL_HOME/.config}"
+: "${XDG_STATE_HOME:=$REAL_HOME/.local/state}"
+: "${XDG_CACHE_HOME:=$REAL_HOME/.cache}"
 : "${OPENCODE_HOME:=$XDG_DATA_HOME/opencode}"
 : "${OPENCODE_DB_PATH:=$OPENCODE_HOME/opencode.db}"
 : "${OPENCODE_BIN:=opencode}"
@@ -210,7 +217,8 @@ info "  Device: $DEVICE_NAME ($DEVICE_ID)"
 # ─── Normalize daemon state paths ───────────────────────────────────────────
 mkdir -p "$(dirname "$OPENCODE_DB_PATH")"
 
-SUPERVISOR_PATH="$HOME/.bun/bin:/usr/local/bin:/usr/bin:/bin"
+SUPERVISOR_PATH="$REAL_HOME/.bun/bin:/usr/local/bin:/usr/bin:/bin"
+SUPERVISOR_USER="$REAL_USER"
 
 # ─── Create Supervisord Config ────────────────────────────────────────
 mkdir -p "$(dirname "$SUPERVISOR_CONF")"
@@ -219,6 +227,7 @@ cat > "$SUPERVISOR_CONF" << SUPEOF
 [program:opencode-daemon]
 command=bun run ${DAEMON_DIR}/repo/apps/daemon/src/index.ts
 directory=${DAEMON_DIR}/repo
+user=${SUPERVISOR_USER}
 autostart=true
 autorestart=true
 startretries=10
@@ -230,22 +239,10 @@ stdout_logfile_maxbytes=10MB
 stdout_logfile_backups=3
 stderr_logfile_maxbytes=10MB
 stderr_logfile_backups=3
-environment=HOME="$HOME",PATH="$SUPERVISOR_PATH",XDG_DATA_HOME="$XDG_DATA_HOME",XDG_CONFIG_HOME="$XDG_CONFIG_HOME",XDG_STATE_HOME="$XDG_STATE_HOME",XDG_CACHE_HOME="$XDG_CACHE_HOME",OPENCODE_HOME="$OPENCODE_HOME",OPENCODE_DB_PATH="$OPENCODE_DB_PATH"
+environment=HOME="$REAL_HOME",PATH="$SUPERVISOR_PATH",COMMAND_CENTER_URL="$COMMAND_CENTER_URL",COMMAND_CENTER_API_KEY="$COMMAND_CENTER_API_KEY",DEVICE_ID="$DEVICE_ID",DEVICE_NAME="$DEVICE_NAME",OPENCODE_BIN="$OPENCODE_BIN",OPENCODE_HOME="$OPENCODE_HOME",OPENCODE_DB_PATH="$OPENCODE_DB_PATH",XDG_DATA_HOME="$XDG_DATA_HOME",XDG_CONFIG_HOME="$XDG_CONFIG_HOME",XDG_STATE_HOME="$XDG_STATE_HOME",XDG_CACHE_HOME="$XDG_CACHE_HOME"
 SUPEOF
 
 info "Supervisord config written to $SUPERVISOR_CONF"
-
-# ─── Ensure .env is loaded by supervisord ─────────────────────────────
-# Add env vars from .env into the supervisor environment line
-ENV_LINE=""
-while IFS='=' read -r key value; do
-  [[ -z "$key" || "$key" == \#* ]] && continue
-  ENV_LINE="${ENV_LINE},${key}=\"${value}\""
-done < "$ENV_FILE"
-# Append to existing environment line
-if [ -n "$ENV_LINE" ]; then
-  sed -i "s|^environment=|environment=${ENV_LINE#,},|" "$SUPERVISOR_CONF"
-fi
 
 # ─── Start/Restart Supervisord ────────────────────────────────────────
 # Ensure supervisord main config exists
