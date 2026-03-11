@@ -2,23 +2,64 @@
 set -euo pipefail
 
 # OpenCode Command Center — Agent Daemon Install Script with Supervisord Persistence
-# Usage: curl -fsSL https://raw.githubusercontent.com/jypark3737/opencode-command-center/master/apps/daemon/install.sh | bash
-# Or:    bash install.sh [--uninstall]
+# Usage:
+#   curl -fsSL https://raw.githubusercontent.com/jypark3737/opencode-command-center/master/apps/daemon/install.sh | sudo bash
+#   Or: sudo bash install.sh [--uninstall]
+#
+# You can pre-set env vars to skip prompts:
+#   COMMAND_CENTER_URL=wss://... COMMAND_CENTER_API_KEY=... DEVICE_NAME=... sudo -E bash install.sh
 
+REPO_URL="https://github.com/jypark3737/opencode-command-center.git"
 DAEMON_DIR="/opt/opencode-daemon"
 SUPERVISOR_CONF="/etc/supervisor/conf.d/opencode-daemon.conf"
 LOG_DIR="/var/log"
 ENV_FILE="$DAEMON_DIR/.env"
 
+# ─── Defaults ─────────────────────────────────────────────────────────
+DEFAULT_WS_URL="wss://web-production-bc782.up.railway.app/ws"
+DEFAULT_API_KEY="b07474ef81cddf62d99c46cfd87718c9a74b24e7409c90fc9e92d6dc412bdb80"
+
 # ─── Colors ──────────────────────────────────────────────────────────
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
+CYAN='\033[0;36m'
+BOLD='\033[1m'
 NC='\033[0m' # No Color
 
 info()  { echo -e "${GREEN}[INFO]${NC} $1"; }
 warn()  { echo -e "${YELLOW}[WARN]${NC} $1"; }
 error() { echo -e "${RED}[ERROR]${NC} $1"; }
+
+# ─── Prompt helper (works with curl | bash via /dev/tty) ──────────────
+ask() {
+  local prompt="$1"
+  local default="$2"
+  local varname="$3"
+  local show_default="$default"
+  
+  # Mask API key display
+  if [[ "$varname" == "COMMAND_CENTER_API_KEY" ]] && [[ -n "$default" ]]; then
+    show_default="${default:0:8}...${default: -4}"
+  fi
+
+  if [[ -n "$show_default" ]]; then
+    prompt="${prompt} ${CYAN}[${show_default}]${NC}"
+  fi
+  prompt="${prompt}: "
+
+  # Try reading from /dev/tty (works even in curl | bash)
+  if [ -t 0 ] || [ -e /dev/tty ]; then
+    echo -en "  $prompt" >/dev/tty 2>/dev/null || echo -en "  $prompt"
+    local answer
+    read -r answer </dev/tty 2>/dev/null || read -r answer || answer=""
+    answer="${answer:-$default}"
+    eval "$varname=\"$answer\""
+  else
+    # Non-interactive — use default
+    eval "$varname=\"$default\""
+  fi
+}
 
 # ─── Uninstall ───────────────────────────────────────────────────────
 if [ "${1:-}" = "--uninstall" ]; then
@@ -96,74 +137,88 @@ info "supervisord found: $(supervisord --version 2>&1 | head -1)"
 mkdir -p "$DAEMON_DIR"
 info "Daemon directory: $DAEMON_DIR"
 
+# ─── Clone/Update Repo ───────────────────────────────────────────────
+if [ -d "$DAEMON_DIR/repo/.git" ]; then
+  info "Updating existing repo..."
+  cd "$DAEMON_DIR/repo" && git pull --ff-only 2>/dev/null || warn "Git pull failed — using existing code"
+else
+  info "Cloning repository..."
+  rm -rf "$DAEMON_DIR/repo"
+  git clone --depth 1 "$REPO_URL" "$DAEMON_DIR/repo"
+fi
+
+# Install dependencies
+info "Installing dependencies..."
+cd "$DAEMON_DIR/repo" && bun install --frozen-lockfile 2>/dev/null || bun install
+
 # ─── Collect Configuration ────────────────────────────────────────────
+echo ""
+echo -e "  ${BOLD}Configuration${NC} (press Enter to accept defaults)"
+echo ""
+
 if [ -f "$ENV_FILE" ]; then
-  info "Existing .env found at $ENV_FILE — preserving."
+  info "Existing .env found — loading as defaults."
   # shellcheck source=/dev/null
   source "$ENV_FILE" 2>/dev/null || true
-else
-  info "Setting up configuration..."
-  
-  if [ -z "${COMMAND_CENTER_URL:-}" ]; then
-    read -rp "  Command Center WebSocket URL (e.g. wss://your-app.railway.app/ws): " COMMAND_CENTER_URL
-  fi
+fi
 
-  if [ -z "${COMMAND_CENTER_API_KEY:-}" ]; then
-    read -rp "  API Key: " COMMAND_CENTER_API_KEY
-  fi
+# WebSocket URL
+ask "Command Center WebSocket URL" "${COMMAND_CENTER_URL:-$DEFAULT_WS_URL}" COMMAND_CENTER_URL
 
-  if [ -z "${DEVICE_ID:-}" ]; then
-    DEVICE_ID=$(cat /proc/sys/kernel/random/uuid 2>/dev/null || uuidgen 2>/dev/null || date +%s%N)
-    info "Generated Device ID: $DEVICE_ID"
-  fi
+# API Key
+ask "API Key" "${COMMAND_CENTER_API_KEY:-$DEFAULT_API_KEY}" COMMAND_CENTER_API_KEY
 
-  if [ -z "${DEVICE_NAME:-}" ]; then
-    DEVICE_NAME=$(hostname)
-    info "Using hostname as device name: $DEVICE_NAME"
-  fi
+# Device Name
+ask "Device Name" "${DEVICE_NAME:-$(hostname)}" DEVICE_NAME
 
-  cat > "$ENV_FILE" << ENVEOF
+# Device ID (auto-generate, don't ask)
+if [ -z "${DEVICE_ID:-}" ]; then
+  DEVICE_ID=$(cat /proc/sys/kernel/random/uuid 2>/dev/null || uuidgen 2>/dev/null || date +%s%N)
+fi
+
+# XDG paths
+: "${HOME:=/root}"
+: "${XDG_DATA_HOME:=$HOME/.local/share}"
+: "${XDG_CONFIG_HOME:=$HOME/.config}"
+: "${XDG_STATE_HOME:=$HOME/.local/state}"
+: "${XDG_CACHE_HOME:=$HOME/.cache}"
+: "${OPENCODE_HOME:=$XDG_DATA_HOME/opencode}"
+: "${OPENCODE_DB_PATH:=$OPENCODE_HOME/opencode.db}"
+: "${OPENCODE_BIN:=opencode}"
+
+# Write .env
+cat > "$ENV_FILE" << ENVEOF
 COMMAND_CENTER_URL=${COMMAND_CENTER_URL}
 COMMAND_CENTER_API_KEY=${COMMAND_CENTER_API_KEY}
 DEVICE_ID=${DEVICE_ID}
 DEVICE_NAME=${DEVICE_NAME}
 PROJECTS=${PROJECTS:-[]}
-OPENCODE_BIN=${OPENCODE_BIN:-opencode}
+OPENCODE_BIN=${OPENCODE_BIN}
+OPENCODE_HOME=${OPENCODE_HOME}
+OPENCODE_DB_PATH=${OPENCODE_DB_PATH}
+XDG_DATA_HOME=${XDG_DATA_HOME}
+XDG_CONFIG_HOME=${XDG_CONFIG_HOME}
+XDG_STATE_HOME=${XDG_STATE_HOME}
+XDG_CACHE_HOME=${XDG_CACHE_HOME}
 ENVEOF
 
-  info "Configuration saved to $ENV_FILE"
-fi
+echo ""
+info "Configuration saved to $ENV_FILE"
+info "  URL:    $COMMAND_CENTER_URL"
+info "  Device: $DEVICE_NAME ($DEVICE_ID)"
 
-# ─── Copy/Link Daemon Source ──────────────────────────────────────────
-# If running from the repo, link source. Otherwise copy.
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-if [ -f "$SCRIPT_DIR/src/index.ts" ]; then
-  # Running from repo — symlink
-  if [ ! -L "$DAEMON_DIR/src" ] && [ ! -d "$DAEMON_DIR/src" ]; then
-    ln -sf "$SCRIPT_DIR/src" "$DAEMON_DIR/src"
-    info "Linked daemon source from repo: $SCRIPT_DIR/src"
-  fi
-  # Copy package.json and tsconfig if not linked
-  for f in package.json tsconfig.json; do
-    if [ -f "$SCRIPT_DIR/$f" ] && [ ! -f "$DAEMON_DIR/$f" ]; then
-      cp "$SCRIPT_DIR/$f" "$DAEMON_DIR/$f"
-    fi
-  done
-  # Ensure node_modules exist
-  if [ -d "$SCRIPT_DIR/../../node_modules" ] && [ ! -L "$DAEMON_DIR/node_modules" ]; then
-    ln -sf "$SCRIPT_DIR/../../node_modules" "$DAEMON_DIR/node_modules"
-  fi
-else
-  warn "Not running from repo. Ensure daemon source is at $DAEMON_DIR/src/index.ts"
-fi
+# ─── Normalize daemon state paths ───────────────────────────────────────────
+mkdir -p "$(dirname "$OPENCODE_DB_PATH")"
+
+SUPERVISOR_PATH="$HOME/.bun/bin:/usr/local/bin:/usr/bin:/bin"
 
 # ─── Create Supervisord Config ────────────────────────────────────────
 mkdir -p "$(dirname "$SUPERVISOR_CONF")"
 
 cat > "$SUPERVISOR_CONF" << SUPEOF
 [program:opencode-daemon]
-command=bun run ${DAEMON_DIR}/src/index.ts
-directory=${DAEMON_DIR}
+command=bun run ${DAEMON_DIR}/repo/apps/daemon/src/index.ts
+directory=${DAEMON_DIR}/repo
 autostart=true
 autorestart=true
 startretries=10
@@ -175,10 +230,22 @@ stdout_logfile_maxbytes=10MB
 stdout_logfile_backups=3
 stderr_logfile_maxbytes=10MB
 stderr_logfile_backups=3
-environment=HOME="/root",PATH="/root/.bun/bin:/usr/local/bin:/usr/bin:/bin"
+environment=HOME="$HOME",PATH="$SUPERVISOR_PATH",XDG_DATA_HOME="$XDG_DATA_HOME",XDG_CONFIG_HOME="$XDG_CONFIG_HOME",XDG_STATE_HOME="$XDG_STATE_HOME",XDG_CACHE_HOME="$XDG_CACHE_HOME",OPENCODE_HOME="$OPENCODE_HOME",OPENCODE_DB_PATH="$OPENCODE_DB_PATH"
 SUPEOF
 
 info "Supervisord config written to $SUPERVISOR_CONF"
+
+# ─── Ensure .env is loaded by supervisord ─────────────────────────────
+# Add env vars from .env into the supervisor environment line
+ENV_LINE=""
+while IFS='=' read -r key value; do
+  [[ -z "$key" || "$key" == \#* ]] && continue
+  ENV_LINE="${ENV_LINE},${key}=\"${value}\""
+done < "$ENV_FILE"
+# Append to existing environment line
+if [ -n "$ENV_LINE" ]; then
+  sed -i "s|^environment=|environment=${ENV_LINE#,},|" "$SUPERVISOR_CONF"
+fi
 
 # ─── Start/Restart Supervisord ────────────────────────────────────────
 # Ensure supervisord main config exists
@@ -211,6 +278,7 @@ if pgrep -x supervisord >/dev/null 2>&1; then
   info "Reloading supervisord..."
   supervisorctl reread
   supervisorctl update
+  supervisorctl restart opencode-daemon 2>/dev/null || true
 else
   info "Starting supervisord..."
   supervisord -c /etc/supervisor/supervisord.conf
