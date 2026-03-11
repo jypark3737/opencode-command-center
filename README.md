@@ -64,7 +64,13 @@ cd apps/daemon && bun run dev
 
 ## Environment Variables
 
-See `apps/web/.env.example` for all required variables.
+See `apps/web/.env.example` for web app values and `apps/daemon/.env.example` for daemon values.
+
+For daemon state isolation, use one state directory per device:
+
+- `OPENCODE_HOME` defaults to `${XDG_DATA_HOME}/opencode`.
+- `OPENCODE_DB_PATH` defaults to `${OPENCODE_HOME}/${DEVICE_ID}/opencode.db`.
+- Set `OPENCODE_DB_PATH` explicitly only if you intentionally want shared state.
 
 ## Migration to NAS
 

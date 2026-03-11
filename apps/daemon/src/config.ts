@@ -1,3 +1,4 @@
+import path from "node:path";
 import { logger } from "./logger";
 
 export interface DaemonConfig {
@@ -8,6 +9,11 @@ export interface DaemonConfig {
   hostname: string;
   opencodeBin: string;
   opencodeDbPath: string;
+}
+
+function normalized(value: string | undefined): string | undefined {
+  const trimmed = value?.trim();
+  return trimmed ? trimmed : undefined;
 }
 
 export function loadConfig(): DaemonConfig {
@@ -27,7 +33,16 @@ export function loadConfig(): DaemonConfig {
     process.exit(1);
   }
 
-  const defaultDbPath = `${process.env.HOME}/.local/share/opencode/opencode.db`;
+  const home = normalized(process.env.HOME) ?? "/root";
+  const xdgDataHome =
+    normalized(process.env.XDG_DATA_HOME) ?? path.join(home, ".local", "share");
+  const opencodeHome =
+    normalized(process.env.OPENCODE_HOME) ?? path.join(xdgDataHome, "opencode");
+  const defaultDbPath = path.join(
+    opencodeHome,
+    process.env.DEVICE_ID!,
+    "opencode.db"
+  );
 
   return {
     commandCenterUrl: process.env.COMMAND_CENTER_URL!,
@@ -35,7 +50,7 @@ export function loadConfig(): DaemonConfig {
     deviceId: process.env.DEVICE_ID!,
     deviceName: process.env.DEVICE_NAME!,
     hostname: process.env.HOSTNAME ?? "unknown",
-    opencodeBin: process.env.OPENCODE_BIN ?? "opencode",
-    opencodeDbPath: process.env.OPENCODE_DB_PATH ?? defaultDbPath,
+    opencodeBin: normalized(process.env.OPENCODE_BIN) ?? "opencode",
+    opencodeDbPath: normalized(process.env.OPENCODE_DB_PATH) ?? defaultDbPath,
   };
 }

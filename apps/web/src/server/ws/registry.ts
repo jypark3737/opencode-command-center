@@ -43,5 +43,6 @@ class AgentRegistry {
   }
 }
 
-// Singleton — shared across the process
-export const agentRegistry = new AgentRegistry();
+const globalForRegistry = globalThis as unknown as { __agentRegistry?: AgentRegistry };
+globalForRegistry.__agentRegistry ??= new AgentRegistry();
+export const agentRegistry = globalForRegistry.__agentRegistry;

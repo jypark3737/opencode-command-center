@@ -14,6 +14,14 @@ RUN cd packages/shared && bun run build
 FROM shared-build AS runner
 COPY apps/daemon ./apps/daemon
 
-ENV NODE_ENV=production
+ENV NODE_ENV=production \
+  HOME=/opencode \
+  XDG_DATA_HOME=/opencode/.local/share \
+  XDG_CONFIG_HOME=/opencode/.config \
+  XDG_STATE_HOME=/opencode/.local/state \
+  XDG_CACHE_HOME=/opencode/.cache \
+  OPENCODE_HOME=/opencode/.local/share/opencode
+
+RUN mkdir -p /opencode/.config /opencode/.cache /opencode/.local/share /opencode/.local/state
 
 CMD ["bun", "run", "apps/daemon/src/index.ts"]

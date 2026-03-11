@@ -270,5 +270,6 @@ Respond with ONLY a JSON object (no markdown, no code blocks):
   }
 }
 
-// Singleton instance
-export const adminOrchestrator = new AdminOrchestrator();
+const globalForOrchestrator = globalThis as unknown as { __adminOrchestrator?: AdminOrchestrator };
+globalForOrchestrator.__adminOrchestrator ??= new AdminOrchestrator();
+export const adminOrchestrator = globalForOrchestrator.__adminOrchestrator;

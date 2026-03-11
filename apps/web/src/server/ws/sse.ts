@@ -30,4 +30,6 @@ class SSEBroadcaster {
   }
 }
 
-export const sseBroadcaster = new SSEBroadcaster();
+const globalForSSE = globalThis as unknown as { __sseBroadcaster?: SSEBroadcaster };
+globalForSSE.__sseBroadcaster ??= new SSEBroadcaster();
+export const sseBroadcaster = globalForSSE.__sseBroadcaster;
