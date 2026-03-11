@@ -2,7 +2,7 @@
 set -euo pipefail
 
 # OpenCode Command Center — Agent Daemon Install Script with Supervisord Persistence
-# Usage: curl -fsSL https://raw.githubusercontent.com/your-repo/install.sh | bash
+# Usage: curl -fsSL https://raw.githubusercontent.com/jypark3737/opencode-command-center/master/apps/daemon/install.sh | bash
 # Or:    bash install.sh [--uninstall]
 
 DAEMON_DIR="/opt/opencode-daemon"
