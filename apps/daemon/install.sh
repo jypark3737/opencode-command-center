@@ -1,13 +1,22 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# OpenCode Command Center — Agent Daemon Install Script with Supervisord Persistence
+# OpenCode Terminal Hub — Daemon Install Script with Supervisord Persistence
 # Usage:
 #   curl -fsSL https://raw.githubusercontent.com/jypark3737/opencode-command-center/master/apps/daemon/install.sh | sudo bash
 #   Or: sudo bash install.sh [--uninstall]
 #
 # You can pre-set env vars to skip prompts:
-#   COMMAND_CENTER_URL=wss://... COMMAND_CENTER_API_KEY=... DEVICE_NAME=... sudo -E bash install.sh
+#   COMMAND_CENTER_URL=wss://... COMMAND_CENTER_API_KEY=... DEVICE_ID=... DEVICE_NAME=... sudo -E bash install.sh
+#
+# Required env vars:
+#   COMMAND_CENTER_URL      — Hub WebSocket URL (e.g. wss://your-hub.railway.app/ws)
+#   COMMAND_CENTER_API_KEY  — API key for authentication
+#   DEVICE_ID               — Unique device identifier (auto-generated if not set)
+#   DEVICE_NAME             — Human-readable device name (defaults to hostname)
+#   OPENCODE_BIN            — Path to opencode binary (default: /home/$USER/.opencode/bin/opencode)
+#   OPENCODE_DB_PATH        — Path to OpenCode SQLite DB (default: $HOME/.local/share/opencode/opencode.db)
+#   PROJECTS_FILTER         — Comma-separated project path prefixes (e.g. /home/user/projects)
 
 REPO_URL="https://github.com/jypark3737/opencode-command-center.git"
 DAEMON_DIR="/opt/opencode-daemon"
@@ -82,8 +91,8 @@ fi
 # ─── Banner ──────────────────────────────────────────────────────────
 echo ""
 echo "  ╔══════════════════════════════════════════════════╗"
-echo "  ║  OpenCode Command Center — Daemon Installer     ║"
-echo "  ║  Persistent agent with supervisord              ║"
+echo "  ║  OpenCode Terminal Hub — Daemon v1.0.0          ║"
+echo "  ║  Persistent tunnel daemon with supervisord      ║"
 echo "  ╚══════════════════════════════════════════════════╝"
 echo ""
 
@@ -122,7 +131,7 @@ info "Bun found: $(bun --version)"
 if ! command -v opencode &>/dev/null; then
   warn "opencode CLI not found. Please install it manually:"
   warn "  See: https://github.com/anthropics/opencode"
-  warn "  Continuing anyway — daemon will fail to execute tasks without it."
+  warn "  Continuing anyway — daemon will fail to start sessions without it."
 fi
 
 # ─── Check/Install Supervisord ────────────────────────────────────────
@@ -172,26 +181,34 @@ if [ -f "$ENV_FILE" ]; then
 fi
 
 # WebSocket URL
-ask "Command Center WebSocket URL" "${COMMAND_CENTER_URL:-$DEFAULT_WS_URL}" COMMAND_CENTER_URL
+ask "Hub WebSocket URL" "${COMMAND_CENTER_URL:-$DEFAULT_WS_URL}" COMMAND_CENTER_URL
 
 # API Key
 ask "API Key" "${COMMAND_CENTER_API_KEY:-$DEFAULT_API_KEY}" COMMAND_CENTER_API_KEY
 
-# Device Name
-ask "Device Name" "${DEVICE_NAME:-$(hostname)}" DEVICE_NAME
-
-# Device ID (auto-generate, don't ask)
+# Device ID (auto-generate if not set, allow override)
 if [ -z "${DEVICE_ID:-}" ]; then
   DEVICE_ID=$(cat /proc/sys/kernel/random/uuid 2>/dev/null || uuidgen 2>/dev/null || date +%s%N)
 fi
+ask "Device ID" "${DEVICE_ID}" DEVICE_ID
+
+# Device Name
+ask "Device Name" "${DEVICE_NAME:-$(hostname)}" DEVICE_NAME
 
 : "${XDG_DATA_HOME:=$REAL_HOME/.local/share}"
 : "${XDG_CONFIG_HOME:=$REAL_HOME/.config}"
 : "${XDG_STATE_HOME:=$REAL_HOME/.local/state}"
 : "${XDG_CACHE_HOME:=$REAL_HOME/.cache}"
 : "${OPENCODE_HOME:=$XDG_DATA_HOME/opencode}"
-: "${OPENCODE_DB_PATH:=$OPENCODE_HOME/opencode.db}"
-: "${OPENCODE_BIN:=opencode}"
+
+# OpenCode binary path
+ask "OpenCode binary path" "${OPENCODE_BIN:-$REAL_HOME/.opencode/bin/opencode}" OPENCODE_BIN
+
+# OpenCode SQLite DB path
+ask "OpenCode DB path" "${OPENCODE_DB_PATH:-$OPENCODE_HOME/opencode.db}" OPENCODE_DB_PATH
+
+# Projects filter (comma-separated path prefixes)
+ask "Projects filter (comma-separated path prefixes)" "${PROJECTS_FILTER:-}" PROJECTS_FILTER
 
 # Write .env
 cat > "$ENV_FILE" << ENVEOF
@@ -199,10 +216,10 @@ COMMAND_CENTER_URL=${COMMAND_CENTER_URL}
 COMMAND_CENTER_API_KEY=${COMMAND_CENTER_API_KEY}
 DEVICE_ID=${DEVICE_ID}
 DEVICE_NAME=${DEVICE_NAME}
-PROJECTS=${PROJECTS:-[]}
 OPENCODE_BIN=${OPENCODE_BIN}
-OPENCODE_HOME=${OPENCODE_HOME}
 OPENCODE_DB_PATH=${OPENCODE_DB_PATH}
+PROJECTS_FILTER=${PROJECTS_FILTER}
+OPENCODE_HOME=${OPENCODE_HOME}
 XDG_DATA_HOME=${XDG_DATA_HOME}
 XDG_CONFIG_HOME=${XDG_CONFIG_HOME}
 XDG_STATE_HOME=${XDG_STATE_HOME}
@@ -239,7 +256,7 @@ stdout_logfile_maxbytes=10MB
 stdout_logfile_backups=3
 stderr_logfile_maxbytes=10MB
 stderr_logfile_backups=3
-environment=HOME="$REAL_HOME",PATH="$SUPERVISOR_PATH",COMMAND_CENTER_URL="$COMMAND_CENTER_URL",COMMAND_CENTER_API_KEY="$COMMAND_CENTER_API_KEY",DEVICE_ID="$DEVICE_ID",DEVICE_NAME="$DEVICE_NAME",OPENCODE_BIN="$OPENCODE_BIN",OPENCODE_HOME="$OPENCODE_HOME",OPENCODE_DB_PATH="$OPENCODE_DB_PATH",XDG_DATA_HOME="$XDG_DATA_HOME",XDG_CONFIG_HOME="$XDG_CONFIG_HOME",XDG_STATE_HOME="$XDG_STATE_HOME",XDG_CACHE_HOME="$XDG_CACHE_HOME"
+environment=HOME="$REAL_HOME",PATH="$SUPERVISOR_PATH",COMMAND_CENTER_URL="$COMMAND_CENTER_URL",COMMAND_CENTER_API_KEY="$COMMAND_CENTER_API_KEY",DEVICE_ID="$DEVICE_ID",DEVICE_NAME="$DEVICE_NAME",OPENCODE_BIN="$OPENCODE_BIN",OPENCODE_DB_PATH="$OPENCODE_DB_PATH",PROJECTS_FILTER="$PROJECTS_FILTER",OPENCODE_HOME="$OPENCODE_HOME",XDG_DATA_HOME="$XDG_DATA_HOME",XDG_CONFIG_HOME="$XDG_CONFIG_HOME",XDG_STATE_HOME="$XDG_STATE_HOME",XDG_CACHE_HOME="$XDG_CACHE_HOME"
 SUPEOF
 
 info "Supervisord config written to $SUPERVISOR_CONF"
