@@ -2,8 +2,6 @@ import { loadConfig } from "./config";
 import { logger } from "./logger";
 import { CommandCenterClient } from "./ws-client";
 import { HeartbeatSender } from "./heartbeat";
-import { SessionManager } from "./session-manager";
-import { AdminCommandHandler } from "./admin-handler";
 import type { ServerMessage } from "@opencode-cc/shared";
 
 async function main() {
@@ -17,12 +15,6 @@ async function main() {
 
   // Initialize heartbeat
   const heartbeat = new HeartbeatSender(client, config);
-
-  // Initialize session manager
-  const sessionManager = new SessionManager(config, client);
-
-  // Initialize admin command handler
-  const adminHandler = new AdminCommandHandler(config.opencodeBin, config.deviceId);
 
   // Handle messages from Command Center
   client.onMessage(async (msg: ServerMessage) => {
@@ -38,82 +30,13 @@ async function main() {
         break;
       }
 
-      case "discover_sessions": {
-        const discovered = await sessionManager.discoverSessions();
-        client.send({
-          type: "sessions_discovered",
-          deviceId: config.deviceId,
-          sessions: discovered,
-        });
-        break;
-      }
-
-      case "create_session": {
-        await sessionManager.createSession(msg.sessionId, msg.projectPath);
-        client.send({
-          type: "session_status",
-          deviceId: config.deviceId,
-          sessionId: msg.sessionId,
-          status: "IDLE",
-        });
-        break;
-      }
-
-      case "assign_task": {
-        // Route to the correct session asynchronously
-        sessionManager
-          .executeTask(msg.sessionId, {
-            taskId: msg.taskId,
-            sessionId: msg.sessionId,
-            projectPath: msg.projectPath,
-            title: msg.title,
-            description: msg.description,
-            verification: msg.verification,
-          })
-          .catch((err) => {
-            const error = err instanceof Error ? err.message : String(err);
-            logger.error(`Task execution error: ${error}`);
-            client.send({
-              type: "task_failed",
-              taskId: msg.taskId,
-              deviceId: config.deviceId,
-              error,
-              timestamp: Date.now(),
-            });
-          });
-        break;
-      }
-
-      case "cancel_task": {
-        logger.info(`Task cancellation requested: ${msg.taskId}`);
-        // TODO: implement cancellation
-        break;
-      }
-
-      case "admin_run_command": {
-        // Run async — don't block other messages
-        adminHandler
-          .handleCommand(msg)
-          .then((result) => {
-            client.send(result);
-          })
-          .catch((err) => {
-            const error = err instanceof Error ? err.message : String(err);
-            logger.error(`[Admin] Handler error: ${error}`);
-            client.send({
-              type: "admin_run_result",
-              requestId: msg.requestId,
-              deviceId: config.deviceId,
-              output: "",
-              exitCode: 1,
-              error,
-            });
-          });
-        break;
-      }
-
       case "heartbeat_ack": {
         // Heartbeat acknowledged — all good
+        break;
+      }
+
+      default: {
+        logger.info(`[Daemon] Unhandled message type: ${(msg as ServerMessage).type}`);
         break;
       }
     }
@@ -127,7 +50,6 @@ async function main() {
     logger.info("Shutting down...");
     heartbeat.stop();
     client.disconnect();
-    await sessionManager.stopAll();
     process.exit(0);
   };
 
@@ -137,7 +59,7 @@ async function main() {
   logger.info("Daemon running. Press Ctrl+C to stop.");
 }
 
-main().catch((err) => {
+main().catch((err: unknown) => {
   console.error("Fatal error:", err);
   process.exit(1);
 });

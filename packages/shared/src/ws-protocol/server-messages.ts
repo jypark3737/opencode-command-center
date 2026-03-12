@@ -5,52 +5,39 @@ export interface RegisterAckMessage {
   error?: string;
 }
 
-export interface AssignTaskMessage {
-  type: "assign_task";
-  taskId: string;
-  sessionId: string;
-  projectPath: string;
-  title: string;
-  description: string;
-  verification: {
-    type: string;
-    command?: string;
-  };
-}
-
-export interface CancelTaskMessage {
-  type: "cancel_task";
-  taskId: string;
-}
-
 export interface HeartbeatAckMessage {
   type: "heartbeat_ack";
   timestamp: number;
 }
 
-export interface CreateSessionMessage {
-  type: "create_session";
+export interface TunnelRequestMessage {
+  type: "tunnel_request";
+  id: string;
   sessionId: string;
-  projectPath: string;
+  method: string;
+  path: string;
+  headers: Record<string, string>;
+  body?: string;
 }
 
-export interface DiscoverSessionsMessage {
-  type: "discover_sessions";
+export interface ListSessionsMessage {
+  type: "list_sessions";
 }
 
-export interface AdminRunCommandMessage {
-  type: "admin_run_command";
-  requestId: string;
-  command: string;
-  projectPath?: string;
-  sessionId?: string;
+export interface StartSessionMessage {
+  type: "start_session";
+  sessionId: string;
+}
+
+export interface StopSessionMessage {
+  type: "stop_session";
+  sessionId: string;
 }
 
 export type ServerMessage =
   | RegisterAckMessage
-  | AssignTaskMessage
-  | CancelTaskMessage
   | HeartbeatAckMessage
-  | CreateSessionMessage
-  | DiscoverSessionsMessage
-  | AdminRunCommandMessage;
+  | TunnelRequestMessage
+  | ListSessionsMessage
+  | StartSessionMessage
+  | StopSessionMessage;

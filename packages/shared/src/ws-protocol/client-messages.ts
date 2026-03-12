@@ -1,5 +1,3 @@
-import type { SubTodoUpdate, FileChange } from "../types/index";
-
 export interface RegisterMessage {
   type: "register";
   deviceId: string;
@@ -20,92 +18,67 @@ export interface HeartbeatMessage {
   activeTaskId: string | null;
 }
 
-export interface TaskStartedMessage {
-  type: "task_started";
-  taskId: string;
+// Daemon → Hub: streamed tunnel response
+export interface TunnelResponseStartMessage {
+  type: "tunnel_response_start";
+  id: string;
   deviceId: string;
-  opencodeSessionId: string;
-  timestamp: number;
+  status: number;
+  headers: Record<string, string>;
 }
 
-export interface SubTodosUpdatedMessage {
-  type: "subtodos_updated";
-  taskId: string;
-  deviceId: string;
-  subTodos: SubTodoUpdate[];
+export interface TunnelResponseChunkMessage {
+  type: "tunnel_response_chunk";
+  id: string;
+  data: string; // base64-encoded chunk
 }
 
-export interface TaskCompletedMessage {
-  type: "task_completed";
-  taskId: string;
-  deviceId: string;
-  opencodeSessionId: string;
-  result: {
-    summary: string;
-    filesChanged: FileChange[];
-    tokensUsed: number;
-    durationMs: number;
-    fullTranscript: unknown;
-  };
-  timestamp: number;
+export interface TunnelResponseEndMessage {
+  type: "tunnel_response_end";
+  id: string;
 }
 
-export interface TaskFailedMessage {
-  type: "task_failed";
-  taskId: string;
+export interface TunnelResponseErrorMessage {
+  type: "tunnel_response_error";
+  id: string;
   deviceId: string;
   error: string;
-  timestamp: number;
 }
 
-export interface SessionsDiscoveredMessage {
-  type: "sessions_discovered";
+// Daemon → Hub: session info
+export interface SessionsListMessage {
+  type: "sessions_list";
   deviceId: string;
   sessions: Array<{
-    opencodeSessionId: string;
-    projectPath: string;
+    id: string;
+    directory: string;
     title?: string;
-    port?: number;
+    timeCreated: string;
+    webPort?: number;
   }>;
 }
 
-export interface SessionStatusMessage {
-  type: "session_status";
+export interface SessionStartedMessage {
+  type: "session_started";
   deviceId: string;
   sessionId: string;
-  status: "IDLE" | "BUSY" | "DEAD";
+  webPort: number;
 }
 
-export interface TaskVerificationMessage {
-  type: "task_verification";
-  taskId: string;
+export interface SessionErrorMessage {
+  type: "session_error";
   deviceId: string;
-  verification: {
-    passed: boolean;
-    type: string;
-    buildOutput?: string;
-    llmVerdict?: string;
-    llmNotes?: string;
-  };
-}
-
-export interface AdminRunResultMessage {
-  type: "admin_run_result";
-  requestId: string;
-  deviceId: string;
-  output: string;
-  exitCode: number;
-  error?: string;
+  sessionId: string;
+  error: string;
 }
 
 export type ClientMessage =
   | RegisterMessage
   | HeartbeatMessage
-  | TaskStartedMessage
-  | SubTodosUpdatedMessage
-  | TaskCompletedMessage
-  | TaskFailedMessage
-  | SessionsDiscoveredMessage
-  | SessionStatusMessage
-  | TaskVerificationMessage
-  | AdminRunResultMessage;
+  | TunnelResponseStartMessage
+  | TunnelResponseChunkMessage
+  | TunnelResponseEndMessage
+  | TunnelResponseErrorMessage
+  | SessionsListMessage
+  | SessionStartedMessage
+  | SessionErrorMessage;

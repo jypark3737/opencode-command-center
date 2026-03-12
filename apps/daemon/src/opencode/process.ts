@@ -6,14 +6,16 @@ export class OpenCodeProcess {
   private port: number;
   private opencodeBin: string;
   private projectPath: string;
+  private sessionId: string | undefined;
   private restartCount = 0;
   private readonly maxRestarts = 3;
   private onCrashHandler: (() => void) | null = null;
 
-  constructor(opencodeBin: string, projectPath: string, port?: number) {
+  constructor(opencodeBin: string, projectPath: string, port?: number, sessionId?: string) {
     this.opencodeBin = opencodeBin;
     this.projectPath = projectPath;
     this.port = port ?? Math.floor(Math.random() * 10000) + 10000;
+    this.sessionId = sessionId;
   }
 
   getPort(): number {
@@ -24,13 +26,17 @@ export class OpenCodeProcess {
     return this.projectPath;
   }
 
+  getSessionId(): string | undefined {
+    return this.sessionId;
+  }
+
   async start(): Promise<void> {
     logger.info(
-      `Starting opencode serve on port ${this.port} for ${this.projectPath}`
+      `Starting opencode web on port ${this.port} for ${this.projectPath}`
     );
 
     this.proc = spawn(
-      [this.opencodeBin, "serve", "--port", String(this.port)],
+      [this.opencodeBin, "web", "--port", String(this.port), "--hostname", "127.0.0.1"],
       {
         stdout: "pipe",
         stderr: "pipe",
@@ -39,11 +45,11 @@ export class OpenCodeProcess {
     );
 
     await this.waitForReady();
-    logger.info(`opencode ready on port ${this.port}`);
+    logger.info(`opencode web ready on port ${this.port}`);
 
     this.proc.exited.then((code) => {
       logger.warn(
-        `opencode process (port ${this.port}) exited with code ${code}`
+        `opencode web process (port ${this.port}) exited with code ${code}`
       );
       if (this.onCrashHandler) this.onCrashHandler();
       this.handleCrash();
@@ -53,26 +59,25 @@ export class OpenCodeProcess {
   private async waitForReady(maxAttempts = 30): Promise<void> {
     for (let i = 0; i < maxAttempts; i++) {
       try {
-        const res = await fetch(`http://localhost:${this.port}/`);
-        if (res.ok || res.status === 404) return;
+        const res = await fetch(`http://127.0.0.1:${this.port}/`);
+        if (res.status === 200 || res.status === 401 || res.status === 404) return;
       } catch {
-        // Not ready yet
       }
       await Bun.sleep(500);
     }
-    throw new Error(`opencode did not start within ${maxAttempts * 0.5}s`);
+    throw new Error(`opencode web did not start within ${maxAttempts * 0.5}s`);
   }
 
   private async handleCrash(): Promise<void> {
     if (this.restartCount >= this.maxRestarts) {
       logger.error(
-        `opencode (port ${this.port}) crashed ${this.maxRestarts} times, giving up`
+        `opencode web (port ${this.port}) crashed ${this.maxRestarts} times, giving up`
       );
       return;
     }
     this.restartCount++;
     logger.info(
-      `Restarting opencode on port ${this.port} (attempt ${this.restartCount})`
+      `Restarting opencode web on port ${this.port} (attempt ${this.restartCount})`
     );
     await Bun.sleep(2000);
     await this.start();
