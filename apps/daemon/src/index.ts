@@ -4,31 +4,8 @@ import { CommandCenterClient } from "./ws-client";
 import { HeartbeatSender } from "./heartbeat";
 import { TunnelHandler } from "./tunnel-handler";
 import { OpenCodeSQLiteReader } from "./opencode/sqlite-reader";
+import { SessionLifecycle } from "./session-lifecycle";
 import type { ServerMessage } from "@opencode-cc/shared";
-
-function buildSessionsList(
-  config: { deviceId: string; projectsFilter: string[] },
-  sqliteReader: OpenCodeSQLiteReader
-) {
-  const sessions = sqliteReader.getAllSessionsWithTitles();
-  const filtered =
-    config.projectsFilter.length > 0
-      ? sessions.filter((s) =>
-          config.projectsFilter.some((f) => s.directory.startsWith(f))
-        )
-      : sessions;
-
-  return {
-    type: "sessions_list" as const,
-    deviceId: config.deviceId,
-    sessions: filtered.map((s) => ({
-      id: s.id,
-      directory: s.directory,
-      title: s.title,
-      timeCreated: s.timeCreated,
-    })),
-  };
-}
 
 async function main() {
   logger.info("OpenCode Terminal Hub — Daemon v1.0.0");
@@ -42,13 +19,20 @@ async function main() {
   const sqliteReader = new OpenCodeSQLiteReader(config.opencodeDbPath);
   sqliteReader.connect();
 
+  const sessionLifecycle = new SessionLifecycle(sqliteReader, config);
+
   client.onMessage(async (msg: ServerMessage) => {
     switch (msg.type) {
       case "register_ack": {
         if (msg.success) {
           logger.info("Registration successful");
           heartbeat.start();
-          client.send(buildSessionsList(config, sqliteReader));
+          const sessions = sessionLifecycle.listSessions();
+          client.send({
+            type: "sessions_list",
+            deviceId: config.deviceId,
+            sessions,
+          });
         } else {
           logger.error(`Registration failed: ${msg.error}`);
           process.exit(1);
@@ -61,32 +45,48 @@ async function main() {
       }
 
       case "list_sessions": {
-        client.send(buildSessionsList(config, sqliteReader));
-        break;
-      }
-
-      case "start_session": {
-        // TODO(T8): Implement full session lifecycle — spawn OpenCodeProcess, register port with tunnelHandler
-        logger.info(
-          `[Tunnel] start_session requested for ${msg.sessionId} (T8 will implement)`
-        );
+        const sessions = sessionLifecycle.listSessions();
         client.send({
-          type: "session_error",
+          type: "sessions_list",
           deviceId: config.deviceId,
-          sessionId: msg.sessionId,
-          error:
-            "Session lifecycle management not yet implemented (coming in T8)",
+          sessions,
         });
         break;
       }
 
+      case "start_session": {
+        logger.info(`[Lifecycle] start_session requested for ${msg.sessionId}`);
+        try {
+          const port = await sessionLifecycle.startSession(msg.sessionId);
+          tunnelHandler.registerPort(msg.sessionId, port);
+          client.send({
+            type: "session_started",
+            deviceId: config.deviceId,
+            sessionId: msg.sessionId,
+            webPort: port,
+          });
+        } catch (err: unknown) {
+          const error = err instanceof Error ? err.message : String(err);
+          logger.error(`[Lifecycle] Failed to start session ${msg.sessionId}: ${error}`);
+          client.send({
+            type: "session_error",
+            deviceId: config.deviceId,
+            sessionId: msg.sessionId,
+            error,
+          });
+        }
+        break;
+      }
+
       case "stop_session": {
-        logger.info(`[Tunnel] stop_session for ${msg.sessionId}`);
+        logger.info(`[Lifecycle] stop_session for ${msg.sessionId}`);
+        await sessionLifecycle.stopSession(msg.sessionId);
         tunnelHandler.unregisterPort(msg.sessionId);
         break;
       }
 
       case "tunnel_request": {
+        sessionLifecycle.touchSession(msg.sessionId);
         tunnelHandler
           .handleRequest(msg, client, config.deviceId)
           .catch((err: unknown) => {
@@ -116,6 +116,7 @@ async function main() {
   const shutdown = async () => {
     logger.info("Shutting down...");
     heartbeat.stop();
+    await sessionLifecycle.stopAll();
     client.disconnect();
     sqliteReader.close();
     process.exit(0);
