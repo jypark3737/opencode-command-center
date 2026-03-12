@@ -35,8 +35,8 @@ export async function handleTunnelRequest(
   // /t/{deviceId}/{sessionId}/rest/of/path → ["", "t", deviceId, sessionId, ...rest]
   const parts = pathname.split("/");
   if (parts.length < 4) {
-    res.writeHead(400);
-    res.end("Invalid tunnel URL");
+    res.writeHead(400, { "Content-Type": "text/html" });
+    res.end(errorPage(400, "Bad Request", "Invalid tunnel URL path."));
     return;
   }
   const deviceId = parts[2]!;
@@ -46,9 +46,7 @@ export async function handleTunnelRequest(
   const device = agentRegistry.get(deviceId);
   if (!device) {
     res.writeHead(502, { "Content-Type": "text/html" });
-    res.end(
-      `<html><body style="background:#0a0a0a;color:#e5e7eb;font-family:monospace;padding:2rem"><h2>Device Not Connected</h2><p>Device <code>${deviceId}</code> is not currently connected to the hub.</p></body></html>`
-    );
+    res.end(errorPage(502, "Device Not Connected", `Device ${deviceId} is not currently connected to the hub.`));
     return;
   }
 
@@ -99,9 +97,7 @@ export async function handleTunnelRequest(
       pendingRequests.delete(requestId);
       if (!pending.responseStarted) {
         res.writeHead(504, { "Content-Type": "text/html" });
-        res.end(
-          `<html><body style="background:#0a0a0a;color:#e5e7eb;font-family:monospace;padding:2rem"><h2>Gateway Timeout</h2><p>The device did not respond within 30 seconds.</p></body></html>`
-        );
+        res.end(errorPage(504, "Gateway Timeout", "The device did not respond within 30 seconds."));
       } else {
         res.end();
       }
@@ -135,9 +131,7 @@ export function resolvePendingRequest(
     if (pending.timeout) clearTimeout(pending.timeout);
     if (!pending.responseStarted) {
       pending.res.writeHead(502, { "Content-Type": "text/html" });
-      pending.res.end(
-        `<html><body style="background:#0a0a0a;color:#e5e7eb;font-family:monospace;padding:2rem"><h2>Tunnel Error</h2><p>${msg.error}</p></body></html>`
-      );
+      pending.res.end(errorPage(502, "Tunnel Error", msg.error));
     } else {
       pending.res.end();
     }
@@ -196,6 +190,21 @@ export function resolvePendingRequest(
     pending.res.end();
     return;
   }
+}
+
+function errorPage(status: number, title: string, message: string): string {
+  return `<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"><title>${title}</title>
+<style>
+  body { margin: 0; background: #030712; color: #9ca3af; font-family: monospace; display: flex; align-items: center; justify-content: center; height: 100vh; }
+  .box { text-align: center; }
+  .code { font-size: 48px; font-weight: bold; color: #374151; margin-bottom: 8px; }
+  .msg { font-size: 14px; color: #6b7280; }
+</style>
+</head>
+<body><div class="box"><div class="code">${status}</div><div class="msg">${message}</div></div></body>
+</html>`;
 }
 
 function headersToRecord(

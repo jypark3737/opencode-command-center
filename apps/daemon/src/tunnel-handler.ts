@@ -2,8 +2,9 @@ import { logger } from "./logger";
 import type { CommandCenterClient } from "./ws-client";
 import type { TunnelRequestMessage } from "@opencode-cc/shared";
 
-const MAX_CHUNK_SIZE = 256 * 1024; // 256KB in bytes before base64 encoding
-const FETCH_TIMEOUT_MS = 30000; // 30 seconds for non-SSE requests
+const MAX_CHUNK_SIZE = 256 * 1024;
+const FETCH_TIMEOUT_MS = 30000;
+const MAX_RESPONSE_BYTES = 50 * 1024 * 1024;
 
 export class TunnelHandler {
   private portMap = new Map<string, number>();
@@ -85,10 +86,18 @@ export class TunnelHandler {
 
       if (response.body) {
         const reader = response.body.getReader();
+        let totalBytes = 0;
+        let oversized = false;
         try {
           while (true) {
             const { done, value } = await reader.read();
             if (done) break;
+
+            totalBytes += value.length;
+            if (totalBytes > MAX_RESPONSE_BYTES) {
+              oversized = true;
+              break;
+            }
 
             let offset = 0;
             while (offset < value.length) {
@@ -103,6 +112,15 @@ export class TunnelHandler {
           }
         } finally {
           reader.releaseLock();
+        }
+        if (oversized) {
+          client.send({
+            type: "tunnel_response_error",
+            id: msg.id,
+            deviceId,
+            error: "Response too large (exceeds 50MB limit)",
+          });
+          return;
         }
       }
 

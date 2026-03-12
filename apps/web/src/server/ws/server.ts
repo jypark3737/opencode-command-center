@@ -4,7 +4,7 @@ import type { ClientMessage, RegisterMessage } from "@opencode-cc/shared";
 import { agentRegistry } from "./registry";
 import { deviceSessions } from "./device-sessions";
 import { validateApiKey } from "../auth";
-import { resolvePendingRequest } from "../tunnel/proxy";
+import { resolvePendingRequest, pendingRequests } from "../tunnel/proxy";
 
 let wss: WebSocketServer | null = null;
 
@@ -85,6 +85,16 @@ function setupWebSocketServer(server: WebSocketServer): void {
       if (deviceId) {
         agentRegistry.unregister(deviceId);
         deviceSessions.removeDevice(deviceId);
+        for (const [reqId, pending] of pendingRequests.entries()) {
+          if (pending.deviceId === deviceId) {
+            if (pending.timeout) clearTimeout(pending.timeout);
+            if (!pending.responseStarted) {
+              pending.res.writeHead(502, { "Content-Type": "text/plain" });
+            }
+            pending.res.end();
+            pendingRequests.delete(reqId);
+          }
+        }
         console.log(`[WS] Device disconnected: ${deviceId}`);
       }
     });
