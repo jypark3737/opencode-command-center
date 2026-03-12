@@ -3,6 +3,7 @@ import { createServer } from "http";
 import next from "next";
 import { parse } from "url";
 import { getWebSocketServer } from "./src/server/ws/server";
+import { handleTunnelRequest } from "./src/server/tunnel/proxy";
 
 const dev = process.env.NODE_ENV !== "production";
 const hostname = process.env.HOSTNAME ?? "0.0.0.0";
@@ -15,6 +16,13 @@ app.prepare().then(() => {
   const httpServer = createServer(async (req, res) => {
     try {
       const parsedUrl = parse(req.url!, true);
+      const pathname = parsedUrl.pathname ?? "/";
+
+      if (pathname.startsWith("/t/")) {
+        await handleTunnelRequest(req, res, pathname);
+        return;
+      }
+
       await handle(req, res, parsedUrl);
     } catch (err) {
       console.error("Error occurred handling", req.url, err);
