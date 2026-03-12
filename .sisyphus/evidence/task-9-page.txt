@@ -1,0 +1,10 @@
+/mnt/ssd_mnt1/pjy/opencode-command-center/apps/web/src/app/api/devices/:
+route.ts
+
+/mnt/ssd_mnt1/pjy/opencode-command-center/apps/web/src/app/api/sessions/start/:
+route.ts
+
+/mnt/ssd_mnt1/pjy/opencode-command-center/apps/web/src/components/:
+DeviceSidebar.tsx
+SessionIframe.tsx
+SessionTabs.tsx

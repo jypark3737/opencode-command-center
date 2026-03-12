@@ -1,0 +1,16 @@
+startSession() spawn flow:
+1. Check existing process → return port (idempotent)
+2. Check MAX_PROCESSES (10) → throw if exceeded
+3. Query SQLite for session directory → throw if not found
+4. new OpenCodeProcess(opencodeBin, directory, undefined, sessionId)
+5. proc.onCrash() → removes from processes map, clears idle timer
+6. await proc.start() — internally spawns "opencode web --port PORT --hostname 127.0.0.1", then calls waitForReady() (accepts 200/401/404)
+7. processes.set(sessionId, proc)
+8. touchSession(sessionId) — sets 30 min idle timer
+9. return proc.getPort()
+
+In index.ts after startSession():
+- tunnelHandler.registerPort(msg.sessionId, port) — registers in portMap
+- send session_started message with webPort
+
+tunnel_request handler also calls touchSession(msg.sessionId) to reset idle timer on activity

@@ -1,0 +1,1 @@
+task-10-auth: HTTP Basic Auth via HUB_PASSWORD env var. Basic scheme only. Health check exempted. matcher excludes static assets.

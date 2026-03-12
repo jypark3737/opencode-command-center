@@ -1,0 +1,21 @@
+import { agentRegistry } from "@/server/ws/registry";
+import { deviceSessions } from "@/server/ws/device-sessions";
+
+export async function GET() {
+  const devices = agentRegistry.getAll().map((conn) => ({
+    deviceId: conn.deviceId,
+    deviceName: conn.deviceName,
+    hostname: conn.hostname,
+    sessions: deviceSessions.getSessions(conn.deviceId),
+  }));
+  return Response.json({ devices });
+}
+import { agentRegistry } from "@/server/ws/registry";
+
+export async function POST(req: Request) {
+  const { deviceId, sessionId } = await req.json() as { deviceId: string; sessionId: string };
+  const device = agentRegistry.get(deviceId);
+  if (!device) return Response.json({ error: "Device not connected" }, { status: 404 });
+  device.ws.send(JSON.stringify({ type: "start_session", sessionId }));
+  return Response.json({ status: "starting" });
+}

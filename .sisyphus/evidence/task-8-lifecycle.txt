@@ -1,0 +1,17 @@
+SessionLifecycle class created at apps/daemon/src/session-lifecycle.ts
+
+- processes: Map<string, OpenCodeProcess> — sessionId → process
+- idleTimers: Map<string, ReturnType<typeof setTimeout>>
+- IDLE_TIMEOUT = 30 minutes
+- MAX_PROCESSES = 10
+
+Methods:
+- listSessions(): uses getAllSessionsWithTitles(), filters by config.projectsFilter
+- startSession(sessionId): idempotent, enforces MAX_PROCESSES, finds dir from SQLite, spawns OpenCodeProcess, registers crash handler, returns port
+- stopSession(sessionId): clears idle timer, stops process
+- touchSession(sessionId): resets idle timer to 30 min
+- stopAll(): stops all running processes
+- getPort(sessionId): returns port for running session
+
+OpenCodeProcess constructor signature: (opencodeBin, projectPath, port?, sessionId?)
+Called as: new OpenCodeProcess(config.opencodeBin, session.directory, undefined, sessionId)
